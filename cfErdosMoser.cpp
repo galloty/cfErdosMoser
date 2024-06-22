@@ -6,12 +6,27 @@ Please give feedback to the authors if improvement is realized. It is distribute
 */
 
 #include <cstdint>
+#include <stdexcept>
+#include <iomanip>
 #include <iostream>
+#define _USE_MATH_DEFINES
 #include <cmath>
+#include <chrono>
 
 #include <gmp.h>
 
-#include "arith64.h"
+inline void mpz_set_ui_64(mpz_t rop, const uint64_t n)
+{
+#ifdef _LONG_LONG_LIMB
+	mpz_set_ui(rop, (unsigned long int)n); if (n > 0) rop->_mp_d[0] = n;
+#else
+	mpz_set_ui(rop, (unsigned long int)(n >> 32));
+	mpz_mul_2exp(rop, rop, 32);
+	mpz_add_ui(rop, rop, (unsigned long int)n);
+#endif
+}
+
+#include "factor.h"
 
 class Mat22
 {
@@ -21,9 +36,10 @@ private:
 
 public:
 	Mat22() { mpz_inits(_a11, _a12, _a21, _a22, nullptr); }
-	~Mat22() { mpz_clears(_a11, _a12, _a21, _a22, nullptr); }
+	virtual ~Mat22() { mpz_clears(_a11, _a12, _a21, _a22, nullptr); }
 
-	Mat22 & operator*=(const Mat22 & rhs)
+private:
+	void _mul_right(const Mat22 & rhs)
 	{
 		mpz_t t; mpz_init(t);
 
@@ -36,17 +52,44 @@ public:
 		mpz_addmul(t, _a22, rhs._a22); mpz_swap(_a22, t);
 
 		mpz_clear(t);
-
-		return *this;
 	}
 
-	Mat22 & operator/=(const mpz_t & d)
+	void _div(const mpz_t & d)
 	{
 		if (mpz_divisible_p(_a11, d)) mpz_divexact(_a11, _a11, d); else { std::cout << "Error" << std::endl; throw; }
 		if (mpz_divisible_p(_a12, d)) mpz_divexact(_a12, _a12, d); else { std::cout << "Error" << std::endl; throw; }
 		if (mpz_divisible_p(_a21, d)) mpz_divexact(_a21, _a21, d); else { std::cout << "Error" << std::endl; throw; }
 		if (mpz_divisible_p(_a22, d)) mpz_divexact(_a22, _a22, d); else { std::cout << "Error" << std::endl; throw; }
-		return *this;
+	}
+
+	void _eval_gcf(const uint64_t n, const uint64_t size)
+	{
+		if (size == 1)
+		{
+			mpz_set_ui(_a11, 0); mpz_set_ui_64(_a12, n / 2);
+			mpz_set_ui(_a21, 1); mpz_set_ui_64(_a22, (n % 2 == 0) ? 2 : n);
+		}
+		else
+		{
+			eval_gcf(n, size / 2);
+			Mat22 M; M.eval_gcf(n + size / 2, size / 2);
+			mul_right(M);
+		}
+	}
+
+public:
+	double mul_right(const Mat22 & rhs)
+	{
+		const auto start = std::chrono::high_resolution_clock::now();
+		_mul_right(rhs);
+		return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
+	}
+
+	double div(const mpz_t & d)
+	{
+		const auto start = std::chrono::high_resolution_clock::now();
+		_div(d);
+		return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
 	}
 
 	void init_gcf(const mpz_t & N)
@@ -55,19 +98,11 @@ public:
 		mpz_set(_a21, N); mpz_mul_2exp(_a21, _a21, 1); mpz_set(_a22, _a21);
 	}
 
-	void eval_gcf(const uint64_t n, const uint64_t size)
+	double eval_gcf(const uint64_t n, const uint64_t size)
 	{
-		if (size == 1)
-		{
-			mpz_set_ui(_a11, 0); mpz_set_ui(_a12, n / 2);
-			mpz_set_ui(_a21, 1); mpz_set_ui(_a22, (n % 2 == 0) ? 2 : n);
-		}
-		else
-		{
-			eval_gcf(n, size / 2);
-			Mat22 M; M.eval_gcf(n + size / 2, size / 2);
-			*this *= M;
-		}
+		const auto start = std::chrono::high_resolution_clock::now();
+		_eval_gcf(n, size);
+		return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
 	}
 
 	bool get_cf_coefficient(mpz_t & coefficient)
@@ -86,30 +121,49 @@ public:
 	}
 };
 
-static void eval_mdivisor(const uint64_t n, const uint64_t size, mpz_t & mdivisor)
+class CF
 {
-	if (size == 1)
-	{
-		mpz_set_ui(mdivisor, n / isprimepower(n));
-	}
-	else
-	{
-		eval_mdivisor(n, size / 2, mdivisor);
-		mpz_t rdivisor; mpz_init(rdivisor); eval_mdivisor(n + size / 2, size / 2, rdivisor);
-		mpz_mul(mdivisor, mdivisor, rdivisor);
-		mpz_clear(rdivisor);
-	}
-}
+private:
+	mpz_t _cond_b, _q_j, _q_jm1, _mdivisor, _a_j;
+	Factor factor;
 
-int main()
-{
-	static const uint32_t fN[20] = { 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 5, 5, 5, 5, 7, 7, 7 };
+public:
+	CF() { mpz_inits(_cond_b, _q_j, _q_jm1, _mdivisor, _a_j, nullptr); }
+	virtual ~CF() { mpz_clears(_cond_b, _q_j, _q_jm1, _mdivisor, _a_j, nullptr); }
 
-	for (size_t d = 0; d < 10; ++d)
+private:
+	void _eval_mdivisor(const uint64_t n, const uint64_t size, mpz_t & mdivisor)
 	{
-		mpz_t N; mpz_init_set_ui(N, 1);
-		for (size_t i = 0; i < d; ++i) mpz_mul_ui(N, N, fN[i]);
-		mpz_t cond_b; mpz_init(cond_b); mpz_mul_ui(cond_b, N, 180); mpz_sub_ui(cond_b, cond_b, 2);
+		if (size == 1)
+		{
+			const uint64_t p = factor.smallest(n);
+			// if n = p^k is a prime power then pp = p else pp = 1 (exponential of Mangoldt function).
+			uint64_t m = 1; if (p != n) { m = n; while (m % p == 0) m /= p; }
+			uint64_t pp = (m == 1) ? p : 1;
+			mpz_set_ui_64(mdivisor, n / pp);
+		}
+		else
+		{
+			_eval_mdivisor(n, size / 2, mdivisor);
+			mpz_t rdivisor; mpz_init(rdivisor); _eval_mdivisor(n + size / 2, size / 2, rdivisor);
+			mpz_mul(mdivisor, mdivisor, rdivisor);
+			mpz_clear(rdivisor);
+		}
+	}
+
+	double eval_mdivisor(const uint64_t n, const uint64_t size, mpz_t & mdivisor)
+	{
+		const auto start = std::chrono::high_resolution_clock::now();
+		_eval_mdivisor(n, size, mdivisor);
+		return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
+	}
+
+public:
+	void solve(const mpz_t & N)
+	{
+		mpz_mul_ui(_cond_b, N, 180); mpz_sub_ui(_cond_b, _cond_b, 2);
+
+		factor.init();
 
 		// n is the index of the convergent of the generalized continued fraction,
 		// j is the index of the convergent of the regular continued fraction.
@@ -123,45 +177,57 @@ int main()
 		M.init_gcf(N);
 
 		// Denominator of the regular continued fraction: q_j and q_{j-1}.
-		mpz_t q_j, q_jm1; mpz_init_set_ui(q_j, 0); mpz_init_set_ui(q_jm1, 1);
+		mpz_set_ui(_q_j, 0); mpz_set_ui(_q_jm1, 1);
 
-		mpz_t mdivisor, a_j; mpz_inits(mdivisor, a_j, nullptr);
+		double time_eval_gcf = 0, time_eval_mdivisor = 0, time_mul_right = 0, time_div = 0, time_mul_left = 0;
 
 		bool found = false;
 		while (!found)
 		{
 			// Matrix form of the generalized continued fraction: p_{n-2} / q_{n-2} and p_{n-1} / q_{n-1}.
 			// Compute 64 terms starting at n.
-			Mat22 Mg; Mg.eval_gcf(n, 64);
-			eval_mdivisor(n / 2, 64 / 2, mdivisor);
+			Mat22 Mg; time_eval_gcf += Mg.eval_gcf(n, 64);
+			time_eval_mdivisor += eval_mdivisor(n / 2, 64 / 2, _mdivisor);
 			n += 64;
 
-			M *= Mg;
-			M /= mdivisor;
+			time_mul_right += M.mul_right(Mg);
+			time_div += M.div(_mdivisor);
 
 			// a_j is the jth coefficient of the regular continued fraction
-			while (M.get_cf_coefficient(a_j))
+			const auto start = std::chrono::high_resolution_clock::now();
+			while (M.get_cf_coefficient(_a_j))
 			{
 				// Update the regular continued fraction
-				mpz_addmul(q_jm1, a_j, q_j); mpz_swap(q_j, q_jm1);
+				mpz_addmul(_q_jm1, _a_j, _q_j); mpz_swap(_q_j, _q_jm1);
 
 				if (j % 2 == 1)	// j - 1 is even
 				{
-					if (mpz_cmp(a_j, cond_b) >= 0)	// a_j >= 180N - 2
+					if (mpz_cmp(_a_j, _cond_b) >= 0)	// a_j >= 180N - 2
 					{
-						const unsigned long g6 = mpz_fdiv_ui(q_jm1, 6);	// gcd(q_{j - 1} , 6) = 1
+						const unsigned long int g6 = mpz_fdiv_ui(_q_jm1, 6);	// gcd(q_{j - 1} , 6) = 1
 						if ((g6 == 1) || (g6 == 5))
 						{
-							long e2; const double x = mpz_get_d_2exp(&e2, q_jm1);
+							time_mul_left += std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
+
+							long e2; const double x = mpz_get_d_2exp(&e2, _q_jm1);
 							const double lx = std::log10(x) + e2 * std::log10(2.0);
 							const uint64_t e10 = uint64_t(lx); const double m10 = std::pow(10.0, lx - double(e10));
 
 							mpz_out_str(stdout, 10, N);
 							std::cout << ", " << j - 1 << ", ";
-							mpz_out_str(stdout, 10, a_j);
+							mpz_out_str(stdout, 10, _a_j);
 							std::cout << ", " << m10 << "*10^" << e10;
 							std::cout << ", " << ((g6 == 1) ? "+" : "-") << "1";
 							std::cout << std::endl;
+
+							const double time_elapsed = time_eval_gcf + time_eval_mdivisor + time_mul_right + time_div + time_mul_left;
+							std::cout << std::setprecision(3)
+								<< "eval_gcf: " << time_eval_gcf * 100 / time_elapsed << "%, "
+								<< "eval_mdivisor: " << time_eval_mdivisor * 100 / time_elapsed << "%, "
+								<< "mul_right: " << time_mul_right * 100 / time_elapsed << "%, "
+								<< "div: " << time_div * 100 / time_elapsed << "%, "
+								<< "mul_left: " << time_mul_left * 100 / time_elapsed << "%."
+								<< std::endl;
 							found = true;
 							break;
 						}
@@ -170,9 +236,34 @@ int main()
 
 				++j;
 			}
+			time_mul_left += std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
+		}
+	}
+};
+
+int main()
+{
+	try
+	{
+		static const uint32_t fN[20] = { 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 5, 5, 5, 5, 7, 7, 7 };
+
+		CF cf;
+		mpz_t N; mpz_init(N);
+
+		for (size_t d = 0; d < 20; ++d)
+		{
+			mpz_set_ui(N, 1);
+			for (size_t i = 0; i < d; ++i) mpz_mul_ui(N, N, fN[i]);
+
+			cf.solve(N);
 		}
 
-		mpz_clears(N, cond_b, q_j, q_jm1, mdivisor, a_j, nullptr);
+		mpz_clear(N);
+	}
+	catch (const std::runtime_error & e)
+	{
+		std::cerr << std::endl << "Error: " << e.what() << "." << std::endl << std::flush;
+		return EXIT_FAILURE;
 	}
 
 	return EXIT_SUCCESS;
