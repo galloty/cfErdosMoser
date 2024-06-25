@@ -73,10 +73,10 @@ public:
 		return *this;
 	}
 
-	uint32_t nu(const gint & n, const uint32_t p)
+	uint32_t nu(const uint32_t p) const
 	{
-		*this = n;
-		uint32_t a = 0; while (mpz_divisible_ui_p(_z, p)) { mpz_divexact_ui(_z, _z, p); ++a; }
+		gint t = *this;
+		uint32_t a = 0; while (mpz_divisible_ui_p(t._z, p)) { mpz_divexact_ui(t._z, t._z, p); ++a; }
 		return a;
 	}
 
