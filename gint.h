@@ -9,7 +9,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <cstdint>
 #include <stdexcept>
-#include <iostream>
+#include <string>
 
 #include <gmp.h>
 
@@ -150,5 +150,12 @@ public:
 
 	void get_d_2exp(double & mantissa, long & exponent) const { mantissa = mpz_get_d_2exp(&exponent, _z); }
 
-	void out(FILE * const fp) const { mpz_out_str(fp, 10, _z); }
+	std::string to_string() const
+	{
+		char * const cstr = new char[mpz_sizeinbase(_z, 10) + 16];
+		mpz_get_str(cstr, 10, _z);
+		const std::string str(cstr);
+		delete[] cstr;
+		return str;
+	}
 };

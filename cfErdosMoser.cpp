@@ -9,6 +9,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <stdexcept>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #define _USE_MATH_DEFINES
 #include <cmath>
 #include <chrono>
@@ -17,6 +18,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "factor.h"
 #include "gint.h"
 #include "mat22.h"
+#include "pio.h"
 
 class CF
 {
@@ -44,7 +46,7 @@ private:
 
 	static void _gcf_matrix(Mat22 & M, const uint64_t n, const uint64_t size)
 	{
-		if (size == 8)
+		if (size == 32)
 		{
 			M.set_gcf(n);
 			Mat22 M_i;
@@ -71,7 +73,7 @@ private:
 
 	void _cfg_divisor(gint & d, const uint64_t n, const uint64_t size)
 	{
-		if (size == 8)
+		if (size == 32)
 		{
 			d = 1u;
 			gint d_i;
@@ -202,11 +204,10 @@ private:
 		const double log10_q = std::log10(x_2) + e_2 * std::log10(2.0);
 		const uint64_t e10 = uint64_t(log10_q); const double m10 = std::pow(10.0, log10_q - double(e10));
 
-		_N.out(stdout);
-		std::cout << ", " << j << ", ";
-		a_jp1.out(stdout);
-		std::cout << ", " << std::setprecision(10) << m10 << "*10^" << e10;
-		std::cout << ", " << ((g6 == 1) ? "+" : "-") << "1";
+		std::ostringstream ss;
+		ss << _N.to_string() << ", " << j << ", " << a_jp1.to_string();
+		ss << ", " << std::setprecision(10) << m10 << "*10^" << e10;
+		ss << ", " << ((g6 == 1) ? "+" : "-") << "1";
 
 		bool cond_d = true;
 		for (const uint32_t p : _PN)
@@ -215,11 +216,12 @@ private:
 			if (nu_q_j > 0)	// p | q_j
 			{
 				// nu(3^{p−1} − 1) = 1 because p != 11, 1006003 (Mirimanoff primes)
-				if (nu_q_j != 1 + _N.nu(p) + 1) { cond_d = false; std::cout << ", " << p; }	// (d)
+				if (nu_q_j != 1 + _N.nu(p) + 1) { cond_d = false; ss << ", " << p; }	// (d)
 			}
 		}
 
-		std::cout << std::endl;
+		ss << std::endl;
+		pio::print(ss.str());
 
 		return cond_d;
 	}
@@ -286,7 +288,8 @@ public:
 			if ((time_elapsed - prev_time_elapsed > 10) || found)
 			{
 				prev_time_elapsed = time_elapsed;
-				std::cout << std::setprecision(3)
+				std::ostringstream ss;
+				ss << std::setprecision(3)
 					<< "j = " << _j << " (+" << _j - j_prev << "), n = " << n << " (+" << n - n_prev  << "), "
 					// << "M_max: " << M_max_size << ", M_min: " << M_min_size << ", Mgcf: " << Mgcf_size << ", "
 					// << "divisor: " << divisor_size << ", q_j: " << _q_j.get_byte_count() << ", " << std::endl
@@ -296,6 +299,7 @@ public:
 					<< "gcf_divisor: " << time_gcf_divisor * 100 / time_elapsed << "%, "
 					<< "gcf_mul_div: " << time_gcf_mul_div * 100 / time_elapsed << "%, "
 					<< "cf_reduce: " << time_cf_reduce * 100 / time_elapsed << "%." << std::endl;
+				pio::print(ss.str());
 				j_prev = _j, n_prev = n;
 			}
 
