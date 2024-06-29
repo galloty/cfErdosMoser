@@ -8,6 +8,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #pragma once
 
 #include <cstdint>
+#include <stdexcept>
 #include <iostream>
 
 #include <gmp.h>
@@ -34,7 +35,7 @@ public:
 	virtual ~gint() { mpz_clear(_z); }
 	gint(const gint & rhs) { mpz_init_set(_z, rhs._z); }
 
-	size_t get_word_count() const { return mpz_size(_z) * sizeof(mp_limb_t); }
+	size_t get_word_count() const { return mpz_size(_z); }
 	size_t get_byte_count() const { return get_word_count() * sizeof(mp_limb_t); }
 
 	gint & operator = (const gint & rhs)
@@ -47,9 +48,12 @@ public:
 	gint & operator = (const uint32_t n) { mpz_set_ui(_z, n); return *this; }
 	gint & operator = (const uint64_t n) { mpz_set_ui_64(_z, n); return *this; }
 
-	void swap(gint & rhs) { mpz_swap(_z, rhs._z); }
+	gint & swap(gint & rhs) { mpz_swap(_z, rhs._z); return *this; }
+
+	int sgn() const { return mpz_sgn(_z); }
 
 	bool operator==(const gint & rhs) const { return (mpz_cmp(_z, rhs._z) == 0); }
+	bool operator!=(const gint & rhs) const { return (mpz_cmp(_z, rhs._z) != 0); }
 	bool operator>=(const gint & rhs) const { return (mpz_cmp(_z, rhs._z) >= 0); }
 
 	gint & operator+=(const uint32_t n) { mpz_add_ui(_z, _z, n); return *this; }
@@ -65,7 +69,48 @@ public:
 	gint & submul(const gint & x, const gint & y) { mpz_submul(_z, x._z, y._z); return *this; }
 	gint & div(const gint & x, const gint & y) { mpz_fdiv_q(_z, x._z, y._z); return *this; }
 
-	gint & rshift(const gint & rhs, const size_t s) { mpz_div_2exp(_z, rhs._z, s * 8); return *this; }	// TODO fix: s * 8 may be > 32-bit
+	gint & lshift(const size_t n)
+	{
+		const size_t size = mpz_size(_z);
+		const int sgn = mpz_sgn(_z);
+		mp_ptr limbs = mpz_limbs_modify(_z, size + n);
+		for (size_t i = 0, j = size - 1; i < size; ++i, --j) limbs[j + n] = limbs[j];
+		for (size_t i = 0; i < n; ++i) limbs[i] = 0;
+		mpz_limbs_finish(_z, sgn * mp_size_t(size + n));
+		return *this;
+	}
+
+	// *this must be positive and different from hi & lo
+	// if fix_roundoff then hi += 1 and lo -= GMP_LIMB_BITS^n
+	void split(gint & hi, gint & lo, const size_t n, const bool fix_roundoff) const
+	{
+		const size_t size = mpz_size(_z);
+		if ((mpz_sgn(_z) <= 0) || (n >= size)) throw std::runtime_error("split failed");
+
+		mp_srcptr limbs = mpz_limbs_read(_z);
+
+		size_t size_lo = n;
+		mpz_set_ui(lo._z, 1); mp_ptr limbs_lo = mpz_limbs_write(lo._z, size_lo);
+		for (size_t i = 0; i < n; ++i) limbs_lo[i] = limbs[i];
+		while ((size_lo != 0) && (limbs_lo[size_lo - 1] == 0)) --size_lo;
+		mpz_limbs_finish(lo._z, mp_size_t(size_lo));
+
+		if (fix_roundoff)
+		{
+			mpz_set_ui(hi._z, 1); mp_ptr limbs_hi = mpz_limbs_write(hi._z, n + 1);
+			for (size_t i = 0; i < n; ++i) limbs_hi[i] = 0;
+			limbs_hi[n] = 1;
+			mpz_limbs_finish(hi._z, mp_size_t(n + 1));
+			mpz_sub(lo._z, lo._z, hi._z);
+		}
+
+		const size_t size_hi = size - n;
+		mpz_set_ui(hi._z, 1); mp_ptr limbs_hi = mpz_limbs_write(hi._z, size_hi);
+		for (size_t i = n; i < size; ++i) limbs_hi[i - n] = limbs[i];
+		mpz_limbs_finish(hi._z, mp_size_t(size_hi));
+
+		if (fix_roundoff) mpz_add_ui(hi._z, hi._z, 1);
+	}
 
 	gint & divexact(const gint & rhs)
 	{

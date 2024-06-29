@@ -21,7 +21,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 class CF
 {
 private:
-	gint _N, _cond_b, _q_j, _q_jm1, _a_j;
+	gint _N, _cond_b, _q_j, _q_jm1;
 	std::vector<uint32_t> _PN;
 	uint64_t _j;
 	Factor _factor;
@@ -31,6 +31,16 @@ public:
 	virtual ~CF() {}
 
 private:
+	static std::string format_time(const double time)
+	{
+		uint64_t seconds = uint64_t(time), minutes = seconds / 60, hours = minutes / 60;
+		seconds -= minutes * 60; minutes -= hours * 60;
+
+		std::stringstream ss;
+		ss << std::setfill('0') << std::setw(2) << hours << ':' << std::setw(2) << minutes << ':' << std::setw(2) << seconds;
+		return ss.str();
+	}
+
 	static void _gcf_matrix(Mat22 & M, const uint64_t n, const uint64_t size)
 	{
 		if (size == 8)
@@ -90,47 +100,42 @@ private:
 		return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
 	}
 
-	static double gcf_mul(Mat22 & M, const Mat22 & Mgcf)
+	static double gcf_mul_div(Mat22 & M, const Mat22 & Mgcf, const gint & divisor)
 	{
 		const auto start = std::chrono::high_resolution_clock::now();
-		M.mul_right(Mgcf);
+		M.mul_right_div(Mgcf, divisor);
 		return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
 	}
 
-	static double gcf_div(Mat22 & M, const gint & divisor)
+	bool check_conditions(const uint64_t j, const gint & a_jp1, const gint & q_j) const
 	{
-		const auto start = std::chrono::high_resolution_clock::now();
-		M.div(divisor);
-		return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
-	}
-
-	bool check_conditions()
-	{
-		if (_j % 2 == 1)	// (a): j - 1 is even
+		if (j % 2 == 0)	// (a): j is even
 		{
-			if (_a_j >= _cond_b)	// (b) a_j >= 180N - 2
+			if (a_jp1 >= _cond_b)	// (b) a_{j+1} >= 180N - 2
 			{
-				const uint32_t g6 = _q_jm1 % 6u;
-				if ((g6 == 1) || (g6 == 5))		// (c) gcd(q_{j - 1} , 6) = 1
+				const uint32_t g6 = q_j % 6u;
+				if ((g6 == 1) || (g6 == 5))		// (c) gcd(q_{j , 6) = 1
 				{
-					double x_2; long e_2; _q_jm1.get_d_2exp(x_2, e_2);
+					q_j.get_word_count();
+
+					double x_2; long e_2; q_j.get_d_2exp(x_2, e_2);
 					const double log10_q = std::log10(x_2) + e_2 * std::log10(2.0);
 					const uint64_t e10 = uint64_t(log10_q); const double m10 = std::pow(10.0, log10_q - double(e10));
 
 					_N.out(stdout);
-					std::cout << ", " << _j - 1 << ", ";
-					_a_j.out(stdout);
-					std::cout << ", " << m10 << "*10^" << e10;
+					std::cout << ", " << j << ", ";
+					a_jp1.out(stdout);
+					std::cout << ", " << std::setprecision(10) << m10 << "*10^" << e10;
 					std::cout << ", " << ((g6 == 1) ? "+" : "-") << "1";
 
 					bool cond_d = true;
 					for (const uint32_t p : _PN)
 					{
-						const uint32_t nu_q_jm1 = _q_jm1.nu(p);
-						if (nu_q_jm1 > 0)	// p | q_{j - 1}
+						const uint32_t nu_q_j = q_j.nu(p);
+						if (nu_q_j > 0)	// p | q_j
 						{
 							// nu(3^{p−1} − 1) = 1 because p != 11, 1006003 (Mirimanoff primes)
-							if (nu_q_jm1 != 1 + _N.nu(p) + 1) { cond_d = false; std::cout << ", " << p; }	// (d)
+							if (nu_q_j != 1 + _N.nu(p) + 1) { cond_d = false; std::cout << ", " << p; }	// (d)
 						}
 					}
 
@@ -144,63 +149,73 @@ private:
 		return false;
 	}
 
-	bool _cf_matrix(const Mat22 & M, Mat22 & Mcf, bool & found)
+	size_t _cf_reduce(Mat22 & M, Mat22 & Mcf, bool & found)
 	{
-		const size_t n = M.get12().get_word_count();
+		size_t count = 0;
+		Mcf.set_identity();
 
-		if (n <= 32)
+		// a_j is the jth coefficient of the regular continued fraction
+		gint a_jp1, a_jp2;
+		while (M.get_cf_coefficient(a_jp1, a_jp2))
 		{
-			bool succeed = false;
+			// Update the regular continued fraction
+			_q_jm1.addmul(a_jp1, _q_j);	// q_j, q_{j+1}
+			_q_j.addmul(a_jp2, _q_jm1);	// q_{j+2}, q_{j+1}
 
-			Mcf.set_identity();
-			Mat22 Mp(M);
+			Mcf.cf_mul(a_jp1); Mcf.cf_mul(a_jp2);
 
-			// a_j is the jth coefficient of the regular continued fraction
-			while (Mp.get_cf_coefficient(_a_j))
-			{
-				// Update the regular continued fraction
-				_q_jm1.addmul(_a_j, _q_j); _q_j.swap(_q_jm1);
+			if (check_conditions(_j + 1, a_jp2, _q_jm1)) found = true;
+			_j += 2;	// j must always be odd
 
-				Mcf.cf_mul(_a_j);
-
-				if (check_conditions()) { found = true; break; }
-
-				++_j;
-				succeed = true;
-			}
-
-			return succeed;
+			++count;
 		}
 
-		Mat22 M_h; M_h.split(M, n / 2);
+		return count;
+	}
 
-		if (!_cf_matrix(M_h, Mcf, found)) return false;
-		if (found) return true;
+	size_t _cf_reduce_half(const size_t level, Mat22 & M, Mat22 & Mcf, bool & found)
+	{
+		const size_t n = M.get_min_word_count();
+		if (n < 32) return _cf_reduce(M, Mcf, found);
 
-		M_h = M;
-		M_h.mul_left(Mcf);
-		M_h.split(M_h, n / 2);
+		Mat22 M_hi, M_lo; M.split(M_hi, M_lo, n / 2);
 
-		Mat22 Mp;
-		if (_cf_matrix(M_h, Mp, found))
+		const size_t count1 = _cf_reduce_half(level + 1, M_hi, Mcf, found);
+		if (count1 == 0) return 0;
+
+		// M_hi is Mcf * M.hi then Mcf * M = (M_hi << (n/2 * GMP_LIMB_BITS)) + Mcf * M_lo
+		M.clear(); M.swap(M_hi);
+		M_lo.mul_left(Mcf); M.lshift(n / 2); M += M_lo;
+
+		if (level == 0) Mcf.clear();	// Free memory
+
+		const size_t n2 = M.get_min_word_count();
+		if (n2 < 32)
 		{
-			if (!found) Mcf.mul_left(Mp);
+			Mat22 Mcf2;
+			const size_t count2 = _cf_reduce(M, Mcf2, found);
+			if (count2 == 0) return count1;
+			if (level > 0) Mcf.mul_left(Mcf2);
+			return count1 + count2;
 		}
 
-		return true;
+		M.split(M_hi, M_lo, n2 / 2);
+		Mat22 Mcf2;
+		const size_t count2 = _cf_reduce_half(level + 1, M_hi, Mcf2, found);
+		if (count2 == 0) return count1;
+
+		M.clear(); M.swap(M_hi);
+		M_lo.mul_left(Mcf2); M.lshift(n2 / 2); M += M_lo;
+
+		if (level > 0) Mcf.mul_left(Mcf2);
+
+		return count1 + count2;
 	}
 
-	double cf_matrix(const Mat22 & M, Mat22 & Mcf, bool & found)
+	double cf_reduce(Mat22 & M, bool & found)
 	{
 		const auto start = std::chrono::high_resolution_clock::now();
-		_cf_matrix(M, Mcf, found);
-		return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
-	}
-
-	static double cf_mul(Mat22 & M, const Mat22 & Mcf)
-	{
-		const auto start = std::chrono::high_resolution_clock::now();
-		M.mul_left(Mcf);
+		Mat22 Mcf; _cf_reduce_half(0, M, Mcf, found);
 		return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
 	}
 
@@ -213,13 +228,14 @@ public:
 		_factor.init();
 
 		// j is the index of the convergent of the regular continued fraction.
-		_j = 0;
+		_j = uint64_t(-1);
 
 		// n is the index of the convergent of the generalized continued fraction.
 		uint64_t n = 1, nstep = 64;
 
 		// Matrix M is the remainder of the nth convergent the generalized continued fraction of log(2) / 2N
 		// after j coefficients of the regular continued fraction retrieval using the Euclidean algorithm.
+		// j and n must be odd such that a_11/a21 < a12/a22
 		Mat22 M;
 
 		// p_0 = 0, p_1 = 1, q_0 = q_1 = 2N.
@@ -228,8 +244,9 @@ public:
 		// Denominator of the regular continued fraction: q_j and q_{j-1}.
 		_q_j = 0u; _q_jm1 = 1u;
 
-		double time_gcf_matrix = 0, time_gcf_divisor = 0, time_gcf_mul = 0, time_gcf_div = 0, time_cf_matrix = 0, time_cf_mul = 0;
-		size_t M_size = 0, Mgcf_size = 0;
+		double time_gcf_matrix = 0, time_gcf_divisor = 0, time_gcf_mul_div = 0, time_cf_reduce = 0, time_elapsed = 0, prev_time_elapsed = 0;
+		size_t M_max_size = 0, M_min_size = 0, Mgcf_size = 0, divisor_size = 0;
+		uint64_t j_prev = _j, n_prev = n;
 
 		bool found = false;
 		while (!found)
@@ -238,34 +255,41 @@ public:
 				// Matrix form of the generalized continued fraction: p_{n-2} / q_{n-2} and p_{n-1} / q_{n-1}.
 				// Compute nstep terms starting at n.
 				Mat22 Mgcf; time_gcf_matrix += gcf_matrix(Mgcf, n, nstep);
+				Mgcf_size = Mgcf.get_byte_count();
 				// divisor of M
 				gint divisor; time_gcf_divisor += cfg_divisor(divisor, n, nstep);
+				divisor_size = divisor.get_byte_count();
 
-				time_gcf_mul += gcf_mul(M, Mgcf);
-				time_gcf_div += gcf_div(M, divisor);
-
-				Mgcf_size = std::max(Mgcf_size, Mgcf.get_byte_count());
+				time_gcf_mul_div += gcf_mul_div(M, Mgcf, divisor);
 			}
 			n += nstep;
 
-			M_size = std::max(M_size, M.get_byte_count()); 
+			// M.print();
+			M_max_size = M.get_byte_count();
 
-			Mat22 Mcf; time_cf_matrix += cf_matrix(M, Mcf, found);
-			time_cf_mul += cf_mul(M, Mcf);
+			time_cf_reduce += cf_reduce(M, found);
 
 			if (Mgcf_size < M.get_byte_count() / 2) nstep *= 2;
 
-			const double time_elapsed = time_gcf_matrix + time_gcf_divisor + time_gcf_mul + time_gcf_div + time_cf_matrix + time_cf_mul;
-			std::cout << std::setprecision(3)
-				<< "j: " << _j << ", elapsed time: " << time_elapsed << ", "
-				<< "M_max: " << M_size << ", M_min: " << M.get_byte_count() << ", Mgcf: " << Mgcf_size << ", q_j: " << _q_j.get_byte_count() << ", "
-				<< "gcf_matrix: " << time_gcf_matrix * 100 / time_elapsed << "%, "
-				<< "gcf_divisor: " << time_gcf_divisor * 100 / time_elapsed << "%, "
-				<< "gcf_mul: " << time_gcf_mul * 100 / time_elapsed << "%, "
-				<< "gcf_div: " << time_gcf_div * 100 / time_elapsed << "%, "
-				<< "cf_matrix: " << time_cf_matrix * 100 / time_elapsed << "%, "
-				<< "cf_mul: " << time_cf_mul * 100 / time_elapsed << "%."
-				<< std::endl;
+			M_min_size = M.get_byte_count();
+
+			time_elapsed = time_gcf_matrix + time_gcf_divisor + time_gcf_mul_div + time_cf_reduce;
+
+			if (time_elapsed - prev_time_elapsed > 10)
+			{
+				prev_time_elapsed = time_elapsed;
+				std::cout << std::setprecision(3)
+					<< "j: " << _j << " (+" << _j - j_prev << "), n: " << n << " (+" << n - n_prev  << "), "
+					// << "M_max: " << M_max_size << ", M_min: " << M_min_size << ", Mgcf: " << Mgcf_size << ", "
+					// << "divisor: " << divisor_size << ", q_j: " << _q_j.get_byte_count() << ", " << std::endl
+					<< "elapsed time: " << format_time(time_elapsed) << ": "
+					<< "gcf_matrix: " << time_gcf_matrix * 100 / time_elapsed << "%, "
+					<< "gcf_divisor: " << time_gcf_divisor * 100 / time_elapsed << "%, "
+					<< "gcf_mul_div: " << time_gcf_mul_div * 100 / time_elapsed << "%, "
+					<< "cf_reduce: " << time_cf_reduce * 100 / time_elapsed << "%." << std::endl;
+			}
+
+			j_prev = _j, n_prev = n;
 		}
 	}
 };
@@ -283,8 +307,8 @@ int main()
 		CF cf;
 		gint N;
 
-		// for (size_t d = 0; d < fN.size(); ++d)
-		size_t d = 10;
+		for (size_t d = 0; d < fN.size(); ++d)
+		// size_t d = 10;
 		{
 			N = 1u;
 			for (size_t i = 0; i < d; ++i) N *= fN[i];
