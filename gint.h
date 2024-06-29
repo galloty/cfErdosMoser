@@ -24,6 +24,27 @@ inline void mpz_set_ui_64(mpz_t rop, const uint64_t n)
 #endif
 }
 
+class Heap
+{
+private:
+	static size_t _size, _max_size;
+
+	static void * allocate_function(size_t size) { _size += size; _max_size = std::max(_max_size, _size); return malloc(size); }
+	static void * reallocate_function(void *ptr, size_t old_size, size_t new_size) { _size += new_size - old_size; _max_size = std::max(_max_size, _size); return realloc(ptr, new_size); }
+	static void free_function(void *ptr, size_t size) { _size -= size; _max_size = std::max(_max_size, _size); free(ptr); }
+
+public:
+	Heap() { mp_set_memory_functions(allocate_function, reallocate_function, free_function); }
+	virtual ~Heap() { mp_set_memory_functions(nullptr, nullptr, nullptr); }
+
+	size_t get_size() const { return _size; }
+	size_t get_max_size() const { return _max_size; }
+
+	void reset_max_size() { _max_size = 0; }
+};
+
+size_t Heap::_size = 0, Heap::_max_size = 0;
+
 // giant integer
 class gint
 {
@@ -34,6 +55,8 @@ public:
 	gint() { mpz_init(_z); }
 	virtual ~gint() { mpz_clear(_z); }
 	gint(const gint & rhs) { mpz_init_set(_z, rhs._z); }
+
+	void reset() { mpz_clear(_z); mpz_init(_z); }	// Free memory
 
 	size_t get_word_count() const { return mpz_size(_z); }
 	size_t get_byte_count() const { return get_word_count() * sizeof(mp_limb_t); }

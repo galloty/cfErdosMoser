@@ -21,13 +21,14 @@ Please give feedback to the authors if improvement is realized. It is distribute
 class CF
 {
 private:
+	Heap & _heap;
 	gint _N, _cond_b, _q_j, _q_jm1, _a_j;
 	std::vector<uint32_t> _PN;
 	uint64_t _j;
 	Factor _factor;
 
 public:
-	CF() {}
+	CF(Heap & heap) : _heap(heap) {}
 	virtual ~CF() {}
 
 private:
@@ -226,6 +227,8 @@ private:
 public:
 	void solve(const gint & N, const std::vector<uint32_t> & PN)
 	{
+		_heap.reset_max_size();
+
 		_N = N; _PN = PN;
 		_cond_b = N; _cond_b *= 180; _cond_b -= 2u;
 
@@ -249,7 +252,7 @@ public:
 		_q_j = 0u; _q_jm1 = 1u;
 
 		double time_gcf_matrix = 0, time_gcf_divisor = 0, time_gcf_mul_div = 0, time_cf_reduce = 0, time_elapsed = 0, prev_time_elapsed = 0;
-		size_t M_max_size = 0, M_min_size = 0, Mgcf_size = 0;	// divisor_size = 0;
+		size_t M_min_size = 0, Mgcf_size = 0;	// divisor_size = 0, M_max_size = 0;
 		uint64_t j_prev = _j, n_prev = n;
 
 		bool found = false;
@@ -268,7 +271,7 @@ public:
 			}
 			n += nstep;
 
-			M_max_size = M.get_byte_count();
+			// M_max_size = M.get_byte_count();
 
 			time_cf_reduce += cf_reduce(M, found);
 
@@ -287,7 +290,7 @@ public:
 					<< "j = " << _j << " (+" << _j - j_prev << "), n = " << n << " (+" << n - n_prev  << "), "
 					// << "M_max: " << M_max_size << ", M_min: " << M_min_size << ", Mgcf: " << Mgcf_size << ", "
 					// << "divisor: " << divisor_size << ", q_j: " << _q_j.get_byte_count() << ", " << std::endl
-					<< "memory size: " << M_max_size * 2 / (1u << 20) << " MB, "
+					<< "memory size: " << _heap.get_max_size() * 2 / (1u << 20) << " MB, " << _heap.get_max_size() / double(_j) << ", "
 					<< "elapsed time: " << format_time(time_elapsed) << ": "
 					<< "gcf_matrix: " << time_gcf_matrix * 100 / time_elapsed << "%, "
 					<< "gcf_divisor: " << time_gcf_divisor * 100 / time_elapsed << "%, "
@@ -298,6 +301,8 @@ public:
 
 			if (found) found = condition_d();
 		}
+
+		_N.reset(); _cond_b.reset(); _q_j.reset(); _q_jm1.reset(); _a_j.reset();
 	}
 };
 
@@ -311,11 +316,11 @@ int main()
 		static const std::array<uint32_t, 51> PNmax = { 5, 7, 17, 19, 29, 31, 43, 101, 113, 127, 163, 197, 211, 257, 281, 379, 401, 449, 487, 631, 641, 701,
 														751, 811, 1373, 1601, 2647, 2801, 3137, 4001, 4481, 7001, 13721, 16001, 17011, 18523, 22051, 28001,
 														30871, 34301, 54881, 70001, 122501, 137201, 160001, 280001, 708751, 1120001, 2195201, 4167451, 5488001 };
-		CF cf;
+		Heap heap;
+		CF cf(heap);
 		gint N;
 
 		for (size_t d = 0; d < fN.size(); ++d)
-		// size_t d = 10;
 		{
 			N = 1u;
 			for (size_t i = 0; i < d; ++i) N *= fN[i];
