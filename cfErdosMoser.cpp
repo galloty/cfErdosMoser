@@ -21,7 +21,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 class CF
 {
 private:
-	gint _N, _cond_b, _q_j, _q_jm1;
+	gint _N, _cond_b, _q_j, _q_jm1, _a_j;
 	std::vector<uint32_t> _PN;
 	uint64_t _j;
 	Factor _factor;
@@ -107,48 +107,6 @@ private:
 		return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
 	}
 
-	bool check_conditions(const uint64_t j, const gint & a_jp1, const gint & q_j) const
-	{
-		if (j % 2 == 0)	// (a): j is even
-		{
-			if (a_jp1 >= _cond_b)	// (b) a_{j+1} >= 180N - 2
-			{
-				const uint32_t g6 = q_j % 6u;
-				if ((g6 == 1) || (g6 == 5))		// (c) gcd(q_{j , 6) = 1
-				{
-					q_j.get_word_count();
-
-					double x_2; long e_2; q_j.get_d_2exp(x_2, e_2);
-					const double log10_q = std::log10(x_2) + e_2 * std::log10(2.0);
-					const uint64_t e10 = uint64_t(log10_q); const double m10 = std::pow(10.0, log10_q - double(e10));
-
-					_N.out(stdout);
-					std::cout << ", " << j << ", ";
-					a_jp1.out(stdout);
-					std::cout << ", " << std::setprecision(10) << m10 << "*10^" << e10;
-					std::cout << ", " << ((g6 == 1) ? "+" : "-") << "1";
-
-					bool cond_d = true;
-					for (const uint32_t p : _PN)
-					{
-						const uint32_t nu_q_j = q_j.nu(p);
-						if (nu_q_j > 0)	// p | q_j
-						{
-							// nu(3^{p−1} − 1) = 1 because p != 11, 1006003 (Mirimanoff primes)
-							if (nu_q_j != 1 + _N.nu(p) + 1) { cond_d = false; std::cout << ", " << p; }	// (d)
-						}
-					}
-
-					std::cout << std::endl;
-
-					if (cond_d) return true;
-				}
-			}
-		}
-
-		return false;
-	}
-
 	size_t _cf_reduce(Mat22 & M, Mat22 & Mcf, bool & found)
 	{
 		size_t count = 0;
@@ -158,16 +116,17 @@ private:
 		gint a_jp1, a_jp2;
 		while (M.get_cf_coefficient(a_jp1, a_jp2))
 		{
-			// Update the regular continued fraction
-			_q_jm1.addmul(a_jp1, _q_j);	// q_j, q_{j+1}
-			_q_j.addmul(a_jp2, _q_jm1);	// q_{j+2}, q_{j+1}
-
 			Mcf.cf_mul(a_jp1); Mcf.cf_mul(a_jp2);
 
-			if (check_conditions(_j + 1, a_jp2, _q_jm1)) found = true;
-			_j += 2;	// j must always be odd
-
+			_j += 2;	// j must always be odd, now a_{j+2} is a_j
 			++count;
+
+			if (a_jp2 >= _cond_b)	// We have: (a): j-1 is even, (b) a_j >= 180N - 2
+			{
+				_a_j = a_jp2;
+				found = true;
+				break;
+			}
 		}
 
 		return count;
@@ -187,27 +146,26 @@ private:
 		M.clear(); M.swap(M_hi);
 		M_lo.mul_left(Mcf); M.lshift(n / 2); M += M_lo;
 
-		if (level == 0) Mcf.clear();	// Free memory
+		if (found) return count1;
 
 		const size_t n2 = M.get_min_word_count();
+		Mat22 Mcf2;
 		if (n2 < 32)
 		{
-			Mat22 Mcf2;
 			const size_t count2 = _cf_reduce(M, Mcf2, found);
 			if (count2 == 0) return count1;
-			if (level > 0) Mcf.mul_left(Mcf2);
+			Mcf.mul_left(Mcf2);
 			return count1 + count2;
 		}
 
 		M.split(M_hi, M_lo, n2 / 2);
-		Mat22 Mcf2;
 		const size_t count2 = _cf_reduce_half(level + 1, M_hi, Mcf2, found);
 		if (count2 == 0) return count1;
 
 		M.clear(); M.swap(M_hi);
 		M_lo.mul_left(Mcf2); M.lshift(n2 / 2); M += M_lo;
 
-		if (level > 0) Mcf.mul_left(Mcf2);
+		Mcf.mul_left(Mcf2);
 
 		return count1 + count2;
 	}
@@ -216,7 +174,53 @@ private:
 	{
 		const auto start = std::chrono::high_resolution_clock::now();
 		Mat22 Mcf; _cf_reduce_half(0, M, Mcf, found);
+		// Update the denominators of the regular continued fraction q_{j-1} and q_j
+		gint t; t.mul(Mcf.get11(), _q_jm1); t.submul(Mcf.get12(), _q_j);
+		_q_j *= Mcf.get22(); _q_j.submul(Mcf.get21(), _q_jm1);
+		_q_jm1.swap(t);
 		return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
+	}
+
+	bool condition_c() const
+	{
+		const gint & q_j = _q_jm1;	// a step backward
+		const uint32_t g6 = q_j % 6u;
+		return ((g6 == 1) || (g6 == 5));	// (c) gcd(q_{j , 6) = 1
+	}
+
+	bool condition_d() const
+	{
+		// a step backward
+		const uint64_t j = _j - 1;
+		const gint & a_jp1 = _a_j;
+		const gint & q_j = _q_jm1;
+
+		const uint32_t g6 = q_j % 6u;
+
+		double x_2; long e_2; q_j.get_d_2exp(x_2, e_2);
+		const double log10_q = std::log10(x_2) + e_2 * std::log10(2.0);
+		const uint64_t e10 = uint64_t(log10_q); const double m10 = std::pow(10.0, log10_q - double(e10));
+
+		_N.out(stdout);
+		std::cout << ", " << j << ", ";
+		a_jp1.out(stdout);
+		std::cout << ", " << std::setprecision(10) << m10 << "*10^" << e10;
+		std::cout << ", " << ((g6 == 1) ? "+" : "-") << "1";
+
+		bool cond_d = true;
+		for (const uint32_t p : _PN)
+		{
+			const uint32_t nu_q_j = q_j.nu(p);
+			if (nu_q_j > 0)	// p | q_j
+			{
+				// nu(3^{p−1} − 1) = 1 because p != 11, 1006003 (Mirimanoff primes)
+				if (nu_q_j != 1 + _N.nu(p) + 1) { cond_d = false; std::cout << ", " << p; }	// (d)
+			}
+		}
+
+		std::cout << std::endl;
+
+		return cond_d;
 	}
 
 public:
@@ -245,7 +249,7 @@ public:
 		_q_j = 0u; _q_jm1 = 1u;
 
 		double time_gcf_matrix = 0, time_gcf_divisor = 0, time_gcf_mul_div = 0, time_cf_reduce = 0, time_elapsed = 0, prev_time_elapsed = 0;
-		size_t M_max_size = 0, M_min_size = 0, Mgcf_size = 0, divisor_size = 0;
+		size_t M_max_size = 0, M_min_size = 0, Mgcf_size = 0;	// divisor_size = 0;
 		uint64_t j_prev = _j, n_prev = n;
 
 		bool found = false;
@@ -258,38 +262,41 @@ public:
 				Mgcf_size = Mgcf.get_byte_count();
 				// divisor of M
 				gint divisor; time_gcf_divisor += cfg_divisor(divisor, n, nstep);
-				divisor_size = divisor.get_byte_count();
+				// divisor_size = divisor.get_byte_count();
 
 				time_gcf_mul_div += gcf_mul_div(M, Mgcf, divisor);
 			}
 			n += nstep;
 
-			// M.print();
 			M_max_size = M.get_byte_count();
 
 			time_cf_reduce += cf_reduce(M, found);
 
-			if (Mgcf_size < M.get_byte_count() / 2) nstep *= 2;
-
 			M_min_size = M.get_byte_count();
+
+			if (Mgcf_size < M_min_size / 2) nstep *= 2;
 
 			time_elapsed = time_gcf_matrix + time_gcf_divisor + time_gcf_mul_div + time_cf_reduce;
 
-			if (time_elapsed - prev_time_elapsed > 10)
+			if (found) found = condition_c();
+
+			if ((time_elapsed - prev_time_elapsed > 10) || found)
 			{
 				prev_time_elapsed = time_elapsed;
 				std::cout << std::setprecision(3)
-					<< "j: " << _j << " (+" << _j - j_prev << "), n: " << n << " (+" << n - n_prev  << "), "
+					<< "j = " << _j << " (+" << _j - j_prev << "), n = " << n << " (+" << n - n_prev  << "), "
 					// << "M_max: " << M_max_size << ", M_min: " << M_min_size << ", Mgcf: " << Mgcf_size << ", "
 					// << "divisor: " << divisor_size << ", q_j: " << _q_j.get_byte_count() << ", " << std::endl
+					<< "memory size: " << M_max_size * 2 / (1u << 20) << " MB, "
 					<< "elapsed time: " << format_time(time_elapsed) << ": "
 					<< "gcf_matrix: " << time_gcf_matrix * 100 / time_elapsed << "%, "
 					<< "gcf_divisor: " << time_gcf_divisor * 100 / time_elapsed << "%, "
 					<< "gcf_mul_div: " << time_gcf_mul_div * 100 / time_elapsed << "%, "
 					<< "cf_reduce: " << time_cf_reduce * 100 / time_elapsed << "%." << std::endl;
+				j_prev = _j, n_prev = n;
 			}
 
-			j_prev = _j, n_prev = n;
+			if (found) found = condition_d();
 		}
 	}
 };
