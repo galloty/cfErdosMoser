@@ -35,7 +35,6 @@ public:
 	const gint & get21() const { return _a21; }
 	const gint & get22() const { return _a22; }
 
-	void clear() { _a11 = 0u; _a12 = 0u; _a21 = 0u; _a22 = 0u; }
 	void set_identity() { _a11 = 1u; _a12 = 0u; _a21 = 0u; _a22 = 1u; }
 
 	void set_gcf(const uint64_t n)
@@ -113,14 +112,14 @@ public:
 		return *this;
 	}
 
-	void split(Mat22 & hi, Mat22 & lo, const size_t n) const
+	void split(Mat22 & lo, const size_t n)
 	{
 		// We may have hi.a_11/hi.a_21 > a_11/a_21 and hi.a_12/hi.a_22 < a_12/a_22 if hi.a_i = a_i >> (n * GMP_LIMB_BITS)
 		// If hi.a_21 = (a_21 >> (n * GMP_LIMB_BITS)) + 1 then hi.a_11/hi.a_21 < a_11/a_21.
 		// If hi.a_12 = (a_12 >> (n * GMP_LIMB_BITS)) -+1 then hi.a_12/hi.a_22 > a_12/a_22.
 		// Since a_11/a_21 < alpha < a_12/a_22, we still have hi.a_11/hi.a_21 < alpha < hi.a_12/hi.a_22.
-		_a11.split(hi._a11, lo._a11, n, false); _a12.split(hi._a12, lo._a12, n, true);
-		_a21.split(hi._a21, lo._a21, n, true); _a22.split(hi._a22, lo._a22, n, false);
+		_a11.split(lo._a11, n, false); _a12.split(lo._a12, n, true);
+		_a21.split(lo._a21, n, true); _a22.split(lo._a22, n, false);
 	}
 
 	void init_gcf(const gint & N)

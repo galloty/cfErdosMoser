@@ -28,17 +28,26 @@ public:
 	}
 
 private:
-	void _print(const std::string & str) const
+	void _print(const std::string & str, const bool is_result) const
 	{
 		std::cout << str;
-        std::ofstream logfile("cflog.txt", std::ios::app);
+		std::ofstream logfile("cflog.txt", std::ios::app);
 		if (logfile.is_open())
-        {
-            logfile << str;
-            logfile.close();
-        }
+		{
+			logfile << str;
+			logfile.close();
+		}
+		if (is_result)
+		{
+			std::ofstream resfile("cfres.txt", std::ios::app);
+			if (resfile.is_open())
+			{
+				resfile << str;
+				resfile.close();
+			}
+		}
 	}
 
 public:
-	static void print(const std::string & str) { getInstance()._print(str); }
+	static void print(const std::string & str, const bool is_result = false) { getInstance()._print(str, is_result); }
 };

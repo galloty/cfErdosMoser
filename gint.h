@@ -103,9 +103,8 @@ public:
 		return *this;
 	}
 
-	// *this must be positive and different from hi & lo
 	// if fix_roundoff then hi += 1 and lo -= GMP_LIMB_BITS^n
-	void split(gint & hi, gint & lo, const size_t n, const bool fix_roundoff) const
+	void split(gint & lo, const size_t n, const bool fix_roundoff)
 	{
 		const size_t size = mpz_size(_z);
 		if ((mpz_sgn(_z) <= 0) || (n >= size)) throw std::runtime_error("split failed");
@@ -118,6 +117,7 @@ public:
 		while ((size_lo != 0) && (limbs_lo[size_lo - 1] == 0)) --size_lo;
 		mpz_limbs_finish(lo._z, mp_size_t(size_lo));
 
+		gint hi;
 		if (fix_roundoff)
 		{
 			mpz_set_ui(hi._z, 1); mp_ptr limbs_hi = mpz_limbs_write(hi._z, n + 1);
@@ -133,6 +133,8 @@ public:
 		mpz_limbs_finish(hi._z, mp_size_t(size_hi));
 
 		if (fix_roundoff) mpz_add_ui(hi._z, hi._z, 1);
+
+		swap(hi);
 	}
 
 	gint & divexact(const gint & rhs)

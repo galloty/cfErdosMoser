@@ -13,19 +13,44 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #define _USE_MATH_DEFINES
 #include <cmath>
 #include <chrono>
-#include <array>
+#include <vector>
+#include <set>
 
 #include "factor.h"
 #include "gint.h"
 #include "mat22.h"
 #include "pio.h"
 
+// See Yves Gallot, Pieter Moree, Wadim Zudilin,
+// The Erdős-Moser equation 1^k + 2^k + ... + (m−1)^k = m^k revisited using continued fractions,
+// Math. Comp. 80 (2011), 1221-1237.
+
+
 class CF
 {
 private:
+	// We must have N | 2^8 * 3^5 * 5^4 * 7^3 * 11^2 * 13^2 * 17^2 * 19^2 * 23 * ... * 199,
+	// where the three dots represent the product of the primes between 23 and 199. See
+	// P. Moree, H. J. J. te Riele, and J. Urbanowicz,
+	// Divisibility properties of integers x, k satisfying 1^ + ... + (x − 1)^k = x^k,
+	// Math. Comp. 63 (1994), 799-815.
+
+	// Here N is a divisor of N_max = 2^8 * 3^5 * 5^4 * 7^3
+
+private:
+	// { p : p < 1000 and p - 1 | N_max and 3 is not a primitive root modulo p }
+	const std::vector<uint32_t> _P1_Nmax = { 11, 13, 37, 41, 61, 71, 73, 97, 109, 151, 181, 193, 241, 251, 271, 337,
+											421, 433, 491, 541, 577, 601, 673, 757, 769, 883 };
+
+	// { p : p < 1000 and 3 is a primitive root modulo p }
+	const std::vector<uint32_t> _P_pr3 = { 5, 7, 17, 19, 29, 31, 43, 53, 79, 89, 101, 113, 127, 137, 139, 149, 163, 173, 197,
+											199, 211, 223, 233, 257, 269, 281, 283, 293, 317, 331, 353, 379, 389, 401, 449, 461,
+											463, 487, 509, 521, 557, 569, 571, 593, 607, 617, 631, 641, 653, 677, 691, 701, 739,
+											751, 773, 797, 809, 811, 821, 823, 857, 859, 881, 907, 929, 941, 953, 977 };
+private:
 	Heap & _heap;
 	gint _N, _cond_b, _q_j, _q_jm1, _a_j;
-	std::vector<uint32_t> _PN;
+	std::vector<uint32_t> _P1_N;
 	uint64_t _j;
 	Factor _factor;
 
@@ -140,13 +165,12 @@ private:
 		const size_t n = M.get_min_word_count();
 		if (n < 32) return _cf_reduce(M, Mcf, found);
 
-		Mat22 M_hi, M_lo; M.split(M_hi, M_lo, n / 2);
+		Mat22 M_lo; M.split(M_lo, n / 2);
 
-		const size_t count1 = _cf_reduce_half(level + 1, M_hi, Mcf, found);
-		if (count1 == 0) return 0;
+		const size_t count1 = _cf_reduce_half(level + 1, M, Mcf, found);
+		if (count1 == 0) { M.lshift(n / 2); M += M_lo; return 0; }
 
 		// M_hi is Mcf * M.hi then Mcf * M = (M_hi << (n/2 * GMP_LIMB_BITS)) + Mcf * M_lo
-		M.clear(); M.swap(M_hi);
 		M_lo.mul_left(Mcf); M.lshift(n / 2); M += M_lo;
 
 		if (found) return count1;
@@ -161,11 +185,10 @@ private:
 			return count1 + count2;
 		}
 
-		M.split(M_hi, M_lo, n2 / 2);
-		const size_t count2 = _cf_reduce_half(level + 1, M_hi, Mcf2, found);
-		if (count2 == 0) return count1;
+		M.split(M_lo, n2 / 2);
+		const size_t count2 = _cf_reduce_half(level + 1, M, Mcf2, found);
+		if (count2 == 0) { M.lshift(n2 / 2); M += M_lo; return count1; }
 
-		M.clear(); M.swap(M_hi);
 		M_lo.mul_left(Mcf2); M.lshift(n2 / 2); M += M_lo;
 
 		Mcf.mul_left(Mcf2);
@@ -210,28 +233,35 @@ private:
 		ss << ", " << ((g6 == 1) ? "+" : "-") << "1";
 
 		bool cond_d = true;
-		for (const uint32_t p : _PN)
+		for (const uint32_t p : _P1_N)
 		{
-			const uint32_t nu_q_j = q_j.nu(p);
-			if (nu_q_j > 0)	// p | q_j
+			const uint32_t r = q_j % (p * p);
+			if ((r != 0) && (r % p == 0)) { cond_d = false; ss << ", " << p; break; }
+		}
+		if (cond_d)
+		{
+			for (const uint32_t p : _P_pr3)
 			{
-				// nu(3^{p−1} − 1) = 1 because p != 11, 1006003 (Mirimanoff primes)
-				if (nu_q_j != 1 + _N.nu(p) + 1) { cond_d = false; ss << ", " << p; }	// (d)
+				const uint32_t r = q_j % (p * p);
+				if ((r != 0) && (r % p == 0)) { cond_d = false; ss << ", " << p; break; }
 			}
 		}
-
 		ss << std::endl;
-		pio::print(ss.str());
+		pio::print(ss.str(), true);
 
 		return cond_d;
 	}
 
 public:
-	void solve(const gint & N, const std::vector<uint32_t> & PN)
+	void solve(const gint & N)
 	{
 		_heap.reset_max_size();
 
-		_N = N; _PN = PN;
+		_N = N;
+
+		// P1_N is a subset of P1_Nmax
+		for (const uint32_t p : _P1_Nmax) if (N % (p - 1) == 0) _P1_N.push_back(p);
+
 		_cond_b = N; _cond_b *= 180; _cond_b -= 2u;
 
 		_factor.init();
@@ -293,7 +323,7 @@ public:
 					<< "j = " << _j << " (+" << _j - j_prev << "), n = " << n << " (+" << n - n_prev  << "), "
 					// << "M_max: " << M_max_size << ", M_min: " << M_min_size << ", Mgcf: " << Mgcf_size << ", "
 					// << "divisor: " << divisor_size << ", q_j: " << _q_j.get_byte_count() << ", " << std::endl
-					<< "memory size: " << _heap.get_max_size() * 2 / (1u << 20) << " MB, " << _heap.get_max_size() / double(_j) << ", "
+					<< "memory size: " << _heap.get_max_size() * 2 / (1u << 20) << " MB, "
 					<< "elapsed time: " << format_time(time_elapsed) << ": "
 					<< "gcf_matrix: " << time_gcf_matrix * 100 / time_elapsed << "%, "
 					<< "gcf_divisor: " << time_gcf_divisor * 100 / time_elapsed << "%, "
@@ -314,26 +344,21 @@ int main()
 {
 	try
 	{
-		static const std::array<uint32_t, 20> fN = { 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 5, 5, 5, 5, 7, 7, 7 };
+		// N_max = 2^8 * 3^5 * 5^4 * 7^3
+		static const std::vector<uint32_t> fN = { 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 5, 5, 5, 5, 7, 7, 7 };
 
-		// P(N) where N_max = 2^8 * 3^5 * 5^4 * 7^3
-		static const std::array<uint32_t, 51> PNmax = { 5, 7, 17, 19, 29, 31, 43, 101, 113, 127, 163, 197, 211, 257, 281, 379, 401, 449, 487, 631, 641, 701,
-														751, 811, 1373, 1601, 2647, 2801, 3137, 4001, 4481, 7001, 13721, 16001, 17011, 18523, 22051, 28001,
-														30871, 34301, 54881, 70001, 122501, 137201, 160001, 280001, 708751, 1120001, 2195201, 4167451, 5488001 };
 		Heap heap;
 		CF cf(heap);
+
+		std::set<uint64_t> Nset;
+		for (uint64_t n2 = 1; n2 <= 256; n2 *= 2)
+			for (uint64_t n3 = 1; n3 <= 243; n3 *= 3)
+				for (uint64_t n5 = 1; n5 <= 625; n5 *= 5)
+					for (uint64_t n7 = 1; n7 <= 343; n7 *= 7) Nset.insert(n2 * n3 * n5 * n7);
+		Nset.erase(1);
+
 		gint N;
-
-		for (size_t d = 0; d < fN.size(); ++d)
-		{
-			N = 1u;
-			for (size_t i = 0; i < d; ++i) N *= fN[i];
-
-			std::vector<uint32_t> PN;	// PN is a subset of PNmax
-			for (const uint32_t p : PNmax) if (N % (p - 1) == 0) PN.push_back(p);
-
-			cf.solve(N, PN);
-		}
+		for (const uint64_t n : Nset) { N = n; cf.solve(N); }
 	}
 	catch (const std::runtime_error & e)
 	{
