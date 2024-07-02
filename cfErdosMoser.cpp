@@ -166,13 +166,13 @@ private:
 
 		const gfloat f11 = Mcf.get11().to_float(), f12 = Mcf.get12().to_float();
 		const gfloat f21 = Mcf.get21().to_float(), f22 = Mcf.get22().to_float();
-		const gfloat tf = f11 * _q_jm1 - f12 * _q_j;
-		_q_j = f22 * _q_j - f21 * _q_jm1; _q_jm1 = tf;
+		const gfloat tf = f11 * _q_jm1 + f12 * _q_j;
+		_q_j = f22 * _q_j + f21 * _q_jm1; _q_jm1 = tf;
 
 		// Update the denominators of the regular continued fraction q_{j-1} and q_j
 		Mcf %= _mod_q;
-		gint ti; ti.mul(Mcf.get11(), _q_jm1_mod); ti.submul(Mcf.get12(), _q_j_mod);
-		_q_j_mod *= Mcf.get22(); _q_j_mod.submul(Mcf.get21(), _q_jm1_mod); _q_jm1_mod.swap(ti);
+		gint ti; ti.mul(Mcf.get11(), _q_jm1_mod); ti.addmul(Mcf.get12(), _q_j_mod);
+		_q_j_mod *= Mcf.get22(); _q_j_mod.addmul(Mcf.get21(), _q_jm1_mod); _q_jm1_mod.swap(ti);
 		_q_j_mod %= _mod_q; _q_jm1_mod %= _mod_q;
 
 		return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
@@ -275,7 +275,6 @@ public:
 			if ((time_elapsed - prev_time_elapsed > 10) || found)
 			{
 				prev_time_elapsed = time_elapsed;
-				const gfloat q_j_10 = _q_j.to_base10();
 				std::ostringstream ss;
 				ss	<< "N = " << Nstr << ", j = " << _j << " (+" << _j - j_prev << "), q_j = " << _q_j.to_base10().to_string() << ", "
 					// << "M_max: " << M_max_size << ", M_min: " << M_min_size << ", Mgcf: " << Mgcf_size << ", divisor: " << divisor_size << ", "

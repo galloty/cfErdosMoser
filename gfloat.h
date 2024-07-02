@@ -57,7 +57,7 @@ public:
 		return *this;
 	}
 
-	gfloat & operator-=(const gfloat & rhs) { return *this += gfloat(-rhs._mantissa, rhs._exponent); }
+	gfloat & operator-=(const gfloat & rhs) { *this += gfloat(-rhs._mantissa, rhs._exponent); return *this; }
 	gfloat & operator*=(const gfloat & rhs) { _mantissa *= rhs._mantissa; _exponent += rhs._exponent; _norm(); return *this; }
 
 	gfloat operator+(const gfloat & rhs) const { gfloat r = *this; r += rhs; return r; }
@@ -67,12 +67,14 @@ public:
 	// convert to base 10
 	gfloat to_base10() const
 	{
-		if (_mantissa <= 0) return gfloat(0, 0);
-		const long double lg10 = std::log10l(_mantissa) + _exponent * std::log10l(2.0L);
+		if (_mantissa == 0) return gfloat(0, 0);
+		const int sgn = (_mantissa < 0) ? -1 : 1;
+		const double m = std::fabs(_mantissa);
+		const long double lg10 = std::log10l(m) + _exponent * std::log10l(2.0L);
 		size_t exponent10 = uint64_t(lg10); double mantissa10 = std::pow(10.0, double(lg10 - exponent10));
 		while (mantissa10 >= 10) { mantissa10 *= 0.1; ++exponent10; }
 		while (mantissa10 < 1) { mantissa10 *= 10; --exponent10; }
-		return gfloat(mantissa10, exponent10);
+		return gfloat(sgn * mantissa10, exponent10);
 	}
 
 	std::string to_string() const
