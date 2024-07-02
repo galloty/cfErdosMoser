@@ -60,12 +60,7 @@ public:
 		return *this;
 	}
 
-	Mat22 & lshift(const size_t n)
-	{
-		_a11.lshift(n); _a12.lshift(n);
-		_a21.lshift(n); _a22.lshift(n);
-		return *this;
-	}
+	Mat22 & operator%=(const gint & m) { _a11 %= m; _a12 %= m; _a21 %= m; _a22 %= m; return *this; }
 
 	Mat22 & mul_right(const Mat22 & rhs)
 	{
@@ -116,10 +111,19 @@ public:
 	{
 		// We may have hi.a_11/hi.a_21 > a_11/a_21 and hi.a_12/hi.a_22 < a_12/a_22 if hi.a_i = a_i >> (n * GMP_LIMB_BITS)
 		// If hi.a_21 = (a_21 >> (n * GMP_LIMB_BITS)) + 1 then hi.a_11/hi.a_21 < a_11/a_21.
-		// If hi.a_12 = (a_12 >> (n * GMP_LIMB_BITS)) -+1 then hi.a_12/hi.a_22 > a_12/a_22.
+		// If hi.a_12 = (a_12 >> (n * GMP_LIMB_BITS)) + 1 then hi.a_12/hi.a_22 > a_12/a_22.
 		// Since a_11/a_21 < alpha < a_12/a_22, we still have hi.a_11/hi.a_21 < alpha < hi.a_12/hi.a_22.
 		_a11.split(lo._a11, n, false); _a12.split(lo._a12, n, true);
 		_a21.split(lo._a21, n, true); _a22.split(lo._a22, n, false);
+	}
+
+	void combine(const Mat22 & lo, const Mat22 & Ml, const size_t n)
+	{
+		// M -= Ml * [0 1 1 0]
+		_a11 -= Ml._a12; _a11.lshift(n); _a11 += lo._a11;
+		_a12 -= Ml._a11; _a12.lshift(n); _a12 += lo._a12;
+		_a21 -= Ml._a22; _a21.lshift(n); _a21 += lo._a21;
+		_a22 -= Ml._a21; _a22.lshift(n); _a22 += lo._a22;
 	}
 
 	void init_gcf(const gint & N)
@@ -144,13 +148,11 @@ public:
 	{
 		gint t;
 
-		coefficient1.div(_a11, _a21);
-		t.div(_a12, _a22);
+		coefficient1.div(_a11, _a21); t.div(_a12, _a22);
 		if (coefficient1 != t) return false;
 		cf_mul(coefficient1);
 
-		coefficient2.div(_a11, _a21);
-		t.div(_a12, _a22);
+		coefficient2.div(_a11, _a21); t.div(_a12, _a22);
 		const bool success = (coefficient2 == t);
 		if (success) cf_mul(coefficient2); else cf_mul_revert(coefficient1);
 		return success;

@@ -13,6 +13,8 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <gmp.h>
 
+#include "gfloat.h"
+
 inline void mpz_set_ui_64(mpz_t rop, const uint64_t n)
 {
 #ifdef _LONG_LONG_LIMB
@@ -85,7 +87,9 @@ public:
 	uint32_t operator%(const uint32_t n) const { return mpz_fdiv_ui(_z, n); }
 
 	gint & operator+=(const gint & rhs) { mpz_add(_z, _z, rhs._z); return *this; }
+	gint & operator-=(const gint & rhs) { mpz_sub(_z, _z, rhs._z); return *this; }
 	gint & operator*=(const gint & rhs) { mpz_mul(_z, _z, rhs._z); return *this; }
+	gint & operator%=(const gint & rhs) { mpz_mod(_z, _z, rhs._z); return *this; }
 
 	gint & mul(const gint & x, const gint & y) { mpz_mul(_z, x._z, y._z); return *this; }
 	gint & addmul(const gint & x, const gint & y) { mpz_addmul(_z, x._z, y._z); return *this; }
@@ -103,38 +107,24 @@ public:
 		return *this;
 	}
 
-	// if fix_roundoff then hi += 1 and lo -= GMP_LIMB_BITS^n
 	void split(gint & lo, const size_t n, const bool fix_roundoff)
 	{
 		const size_t size = mpz_size(_z);
 		if ((mpz_sgn(_z) <= 0) || (n >= size)) throw std::runtime_error("split failed");
 
-		mp_srcptr limbs = mpz_limbs_read(_z);
+		const size_t size_hi = size - n;
+		mp_ptr limbs = mpz_limbs_modify(_z, size_hi);
 
 		size_t size_lo = n;
-		mpz_set_ui(lo._z, 1); mp_ptr limbs_lo = mpz_limbs_write(lo._z, size_lo);
+		mp_ptr limbs_lo = mpz_limbs_write(lo._z, size_lo);
 		for (size_t i = 0; i < n; ++i) limbs_lo[i] = limbs[i];
 		while ((size_lo != 0) && (limbs_lo[size_lo - 1] == 0)) --size_lo;
 		mpz_limbs_finish(lo._z, mp_size_t(size_lo));
 
-		gint hi;
-		if (fix_roundoff)
-		{
-			mpz_set_ui(hi._z, 1); mp_ptr limbs_hi = mpz_limbs_write(hi._z, n + 1);
-			for (size_t i = 0; i < n; ++i) limbs_hi[i] = 0;
-			limbs_hi[n] = 1;
-			mpz_limbs_finish(hi._z, mp_size_t(n + 1));
-			mpz_sub(lo._z, lo._z, hi._z);
-		}
+		for (size_t i = n; i < size; ++i) limbs[i - n] = limbs[i];
+		mpz_limbs_finish(_z, mp_size_t(size_hi));
 
-		const size_t size_hi = size - n;
-		mpz_set_ui(hi._z, 1); mp_ptr limbs_hi = mpz_limbs_write(hi._z, size_hi);
-		for (size_t i = n; i < size; ++i) limbs_hi[i - n] = limbs[i];
-		mpz_limbs_finish(hi._z, mp_size_t(size_hi));
-
-		if (fix_roundoff) mpz_add_ui(hi._z, hi._z, 1);
-
-		swap(hi);
+		if (fix_roundoff) mpz_add_ui(_z, _z, 1);
 	}
 
 	gint & divexact(const gint & rhs)
@@ -150,7 +140,20 @@ public:
 		return a;
 	}
 
-	void get_d_2exp(double & mantissa, long & exponent) const { mantissa = mpz_get_d_2exp(&exponent, _z); }
+	gfloat to_float() const
+	{
+		const size_t size = mpz_size(_z);
+		if (size == 0) return gfloat(0, 0);
+
+		// base 2
+		long double mantissa; size_t exponent;
+		mp_srcptr limbs = mpz_limbs_read(_z);
+		if (size == 1) { mantissa = limbs[0]; exponent = 0; }
+		else { mantissa = std::ldexpl(limbs[size - 1], 64) + limbs[size - 2]; exponent = (size - 2) * sizeof(mp_limb_t) * 8; };
+		while (mantissa >= 1) { mantissa *= 0.5; ++exponent; }
+
+		return gfloat(mantissa, exponent);
+	}
 
 	std::string to_string() const
 	{

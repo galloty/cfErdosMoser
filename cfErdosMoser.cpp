@@ -7,9 +7,9 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <cstdint>
 #include <stdexcept>
-#include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <iomanip>
 #define _USE_MATH_DEFINES
 #include <cmath>
 #include <chrono>
@@ -17,6 +17,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <set>
 
 #include "factor.h"
+#include "gfloat.h"
 #include "gint.h"
 #include "mat22.h"
 #include "pio.h"
@@ -25,34 +26,16 @@ Please give feedback to the authors if improvement is realized. It is distribute
 // The Erdős-Moser equation 1^k + 2^k + ... + (m−1)^k = m^k revisited using continued fractions,
 // Math. Comp. 80 (2011), 1221-1237.
 
-
 class CF
 {
 private:
-	// We must have N | 2^8 * 3^5 * 5^4 * 7^3 * 11^2 * 13^2 * 17^2 * 19^2 * 23 * ... * 199,
-	// where the three dots represent the product of the primes between 23 and 199. See
-	// P. Moree, H. J. J. te Riele, and J. Urbanowicz,
-	// Divisibility properties of integers x, k satisfying 1^ + ... + (x − 1)^k = x^k,
-	// Math. Comp. 63 (1994), 799-815.
-
-	// Here N is a divisor of N_max = 2^8 * 3^5 * 5^4 * 7^3
-
-private:
-	// { p : p < 1000 and p - 1 | N_max and 3 is not a primitive root modulo p }
-	const std::vector<uint32_t> _P1_Nmax = { 11, 13, 37, 41, 61, 71, 73, 97, 109, 151, 181, 193, 241, 251, 271, 337,
-											421, 433, 491, 541, 577, 601, 673, 757, 769, 883 };
-
-	// { p : p < 1000 and 3 is a primitive root modulo p }
-	const std::vector<uint32_t> _P_pr3 = { 5, 7, 17, 19, 29, 31, 43, 53, 79, 89, 101, 113, 127, 137, 139, 149, 163, 173, 197,
-											199, 211, 223, 233, 257, 269, 281, 283, 293, 317, 331, 353, 379, 389, 401, 449, 461,
-											463, 487, 509, 521, 557, 569, 571, 593, 607, 617, 631, 641, 653, 677, 691, 701, 739,
-											751, 773, 797, 809, 811, 821, 823, 857, 859, 881, 907, 929, 941, 953, 977 };
-private:
 	Heap & _heap;
-	gint _N, _cond_b, _q_j, _q_jm1, _a_j;
-	std::vector<uint32_t> _P1_N;
+	gint _N, _cond_b, _mod_q, _q_j_mod, _q_jm1_mod, _a_j;
+	gfloat _q_j, _q_jm1;
 	uint64_t _j;
 	Factor _factor;
+	// { p : 3 is a primitive root modulo p } such that 6 * (5*7*17*19*29*31*43)^2 < 2^64
+	const std::vector<uint32_t> _P_pr3 = { 5, 7, 17, 19, 29, 31, 43 };
 
 public:
 	CF(Heap & heap) : _heap(heap) {}
@@ -69,7 +52,7 @@ private:
 		return ss.str();
 	}
 
-	static void _gcf_matrix(Mat22 & M, const uint64_t n, const uint64_t size)
+	void _gcf_matrix_divisor(Mat22 & M, gint & d, const uint64_t n, const uint64_t size)
 	{
 		if (size == 32)
 		{
@@ -80,51 +63,31 @@ private:
 				M_i.set_gcf(n + i);
 				M.mul_right(M_i);
 			}
-		}
-		else
-		{
-			_gcf_matrix(M, n, size / 2);
-			Mat22 M_r; _gcf_matrix(M_r, n + size / 2, size / 2);
-			M.mul_right(M_r);
-		}
-	}
 
-	static double gcf_matrix(Mat22 & M, const uint64_t n, const uint64_t size)
-	{
-		const auto start = std::chrono::high_resolution_clock::now();
-		_gcf_matrix(M, n, size);
-		return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
-	}
-
-	void _cfg_divisor(gint & d, const uint64_t n, const uint64_t size)
-	{
-		if (size == 32)
-		{
 			d = 1u;
 			gint d_i;
 			for (uint64_t i = 0; i < size; ++i)
 			{
 				const uint64_t n_i = n + i;
 				const uint64_t p = _factor.smallest(n_i);
-				// if n = p^k is a prime power then pp = p else pp = 1 (exponential of Mangoldt function).
+				// if n_i = p^k is a prime power then pp = p else pp = 1 (exponential of Mangoldt function).
 				uint64_t m = 1; if (p != n_i) { m = n_i; while (m % p == 0) m /= p; }
-				uint64_t pp = (m == 1) ? p : 1;
-				d_i = n_i / pp;
+				d_i = (m == 1) ? n_i / p : n_i;	// divides by pp
 				d *= d_i;
 			}
 		}
 		else
 		{
-			_cfg_divisor(d, n, size / 2);
-			gint d_r; _cfg_divisor(d_r, n + size / 2, size / 2);
-			d *= d_r;
+			_gcf_matrix_divisor(M, d, n, size / 2);
+			Mat22 M_r; gint d_r; _gcf_matrix_divisor(M_r, d_r, n + size / 2, size / 2);
+			M.mul_right(M_r); d *= d_r;
 		}
 	}
 
-	double cfg_divisor(gint & divisor, const uint64_t n, const uint64_t size)
+	double gcf_matrix_divisor(Mat22 & M, gint & divisor, const uint64_t n, const uint64_t size)
 	{
 		const auto start = std::chrono::high_resolution_clock::now();
-		_cfg_divisor(divisor, n, size);
+		_gcf_matrix_divisor(M, divisor, n, size);
 		return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
 	}
 
@@ -168,10 +131,10 @@ private:
 		Mat22 M_lo; M.split(M_lo, n / 2);
 
 		const size_t count1 = _cf_reduce_half(level + 1, M, Mcf, found);
-		if (count1 == 0) { M.lshift(n / 2); M += M_lo; return 0; }
+		if (count1 == 0) { M.combine(M_lo, Mcf, n / 2); return 0; }
 
 		// M_hi is Mcf * M.hi then Mcf * M = (M_hi << (n/2 * GMP_LIMB_BITS)) + Mcf * M_lo
-		M_lo.mul_left(Mcf); M.lshift(n / 2); M += M_lo;
+		M_lo.mul_left(Mcf); M.combine(M_lo, Mcf, n / 2);
 
 		if (found) return count1;
 
@@ -187,9 +150,9 @@ private:
 
 		M.split(M_lo, n2 / 2);
 		const size_t count2 = _cf_reduce_half(level + 1, M, Mcf2, found);
-		if (count2 == 0) { M.lshift(n2 / 2); M += M_lo; return count1; }
+		if (count2 == 0) { M.combine(M_lo, Mcf2, n2 / 2); return count1; }
 
-		M_lo.mul_left(Mcf2); M.lshift(n2 / 2); M += M_lo;
+		M_lo.mul_left(Mcf2); M.combine(M_lo, Mcf2, n2 / 2);
 
 		Mcf.mul_left(Mcf2);
 
@@ -200,16 +163,24 @@ private:
 	{
 		const auto start = std::chrono::high_resolution_clock::now();
 		Mat22 Mcf; _cf_reduce_half(0, M, Mcf, found);
+
+		const gfloat f11 = Mcf.get11().to_float(), f12 = Mcf.get12().to_float();
+		const gfloat f21 = Mcf.get21().to_float(), f22 = Mcf.get22().to_float();
+		const gfloat tf = f11 * _q_jm1 - f12 * _q_j;
+		_q_j = f22 * _q_j - f21 * _q_jm1; _q_jm1 = tf;
+
 		// Update the denominators of the regular continued fraction q_{j-1} and q_j
-		gint t; t.mul(Mcf.get11(), _q_jm1); t.submul(Mcf.get12(), _q_j);
-		_q_j *= Mcf.get22(); _q_j.submul(Mcf.get21(), _q_jm1);
-		_q_jm1.swap(t);
+		Mcf %= _mod_q;
+		gint ti; ti.mul(Mcf.get11(), _q_jm1_mod); ti.submul(Mcf.get12(), _q_j_mod);
+		_q_j_mod *= Mcf.get22(); _q_j_mod.submul(Mcf.get21(), _q_jm1_mod); _q_jm1_mod.swap(ti);
+		_q_j_mod %= _mod_q; _q_jm1_mod %= _mod_q;
+
 		return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
 	}
 
 	bool condition_c() const
 	{
-		const gint & q_j = _q_jm1;	// a step backward
+		const gint & q_j = _q_jm1_mod;	// a step backward
 		const uint32_t g6 = q_j % 6u;
 		return ((g6 == 1) || (g6 == 5));	// (c) gcd(q_{j , 6) = 1
 	}
@@ -219,32 +190,20 @@ private:
 		// a step backward
 		const uint64_t j = _j - 1;
 		const gint & a_jp1 = _a_j;
-		const gint & q_j = _q_jm1;
+		const gint & q_j_mod = _q_jm1_mod;
+		const gfloat & q_j = _q_jm1;
 
-		const uint32_t g6 = q_j % 6u;
-
-		double x_2; long e_2; q_j.get_d_2exp(x_2, e_2);
-		const double log10_q = std::log10(x_2) + e_2 * std::log10(2.0);
-		const uint64_t e10 = uint64_t(log10_q); const double m10 = std::pow(10.0, log10_q - double(e10));
+		const uint32_t g6 = q_j_mod % 6u;
 
 		std::ostringstream ss;
-		ss << _N.to_string() << ", " << j << ", " << a_jp1.to_string();
-		ss << ", " << std::setprecision(10) << m10 << "*10^" << e10;
-		ss << ", " << ((g6 == 1) ? "+" : "-") << "1";
+		ss << _N.to_string() << ", " << j << ", " << a_jp1.to_string() << ", "
+		   << q_j.to_base10().to_string() << ", " << ((g6 == 1) ? "+" : "-") << "1";
 
 		bool cond_d = true;
-		for (const uint32_t p : _P1_N)
+		for (const uint32_t p : _P_pr3)
 		{
-			const uint32_t r = q_j % (p * p);
+			const uint32_t r = q_j_mod % (p * p);
 			if ((r != 0) && (r % p == 0)) { cond_d = false; ss << ", " << p; break; }
-		}
-		if (cond_d)
-		{
-			for (const uint32_t p : _P_pr3)
-			{
-				const uint32_t r = q_j % (p * p);
-				if ((r != 0) && (r % p == 0)) { cond_d = false; ss << ", " << p; break; }
-			}
 		}
 		ss << std::endl;
 		pio::print(ss.str(), true);
@@ -258,11 +217,8 @@ public:
 		_heap.reset_max_size();
 
 		_N = N;
-
-		// P1_N is a subset of P1_Nmax
-		for (const uint32_t p : _P1_Nmax) if (N % (p - 1) == 0) _P1_N.push_back(p);
-
 		_cond_b = N; _cond_b *= 180; _cond_b -= 2u;
+		_mod_q = 6u; for (const uint32_t p : _P_pr3) _mod_q *= p * p;
 
 		_factor.init();
 
@@ -281,62 +237,62 @@ public:
 		M.init_gcf(N);
 
 		// Denominator of the regular continued fraction: q_j and q_{j-1}.
-		_q_j = 0u; _q_jm1 = 1u;
+		_q_j_mod = 0u; _q_jm1_mod = 1u;
+		_q_j = gfloat(0, 0); _q_jm1 = gfloat(1, 0);
 
-		double time_gcf_matrix = 0, time_gcf_divisor = 0, time_gcf_mul_div = 0, time_cf_reduce = 0, time_elapsed = 0, prev_time_elapsed = 0;
-		size_t M_min_size = 0, Mgcf_size = 0;	// divisor_size = 0, M_max_size = 0;
-		uint64_t j_prev = _j, n_prev = n;
+		const std::string Nstr = N.to_string();
+		double time_gcf_matrix_divisor = 0, time_gcf_mul_div = 0, time_cf_reduce = 0, time_elapsed = 0, prev_time_elapsed = 0;
+		size_t M_min_size = 0, Mgcf_size = 0, divisor_size = 0, M_max_size = 0;
+		uint64_t j_prev = _j;	//, n_prev = n;
 
 		bool found = false;
 		while (!found)
 		{
 			{
 				// Matrix form of the generalized continued fraction: p_{n-2} / q_{n-2} and p_{n-1} / q_{n-1}.
-				// Compute nstep terms starting at n.
-				Mat22 Mgcf; time_gcf_matrix += gcf_matrix(Mgcf, n, nstep);
+				// Compute nstep terms of the matrix and its divisor starting at n.
+				Mat22 Mgcf; gint divisor;
+				time_gcf_matrix_divisor += gcf_matrix_divisor(Mgcf, divisor, n, nstep);
 				Mgcf_size = Mgcf.get_byte_count();
-				// divisor of M
-				gint divisor; time_gcf_divisor += cfg_divisor(divisor, n, nstep);
-				// divisor_size = divisor.get_byte_count();
+				divisor_size = divisor.get_byte_count();
 
 				time_gcf_mul_div += gcf_mul_div(M, Mgcf, divisor);
 			}
 			n += nstep;
 
-			// M_max_size = M.get_byte_count();
+			M_max_size = M.get_byte_count();
 
 			time_cf_reduce += cf_reduce(M, found);
 
 			M_min_size = M.get_byte_count();
 
-			if (Mgcf_size < M_min_size / 2) nstep *= 2;
+			if (Mgcf_size < M_min_size / 4) nstep *= 2;
 
-			time_elapsed = time_gcf_matrix + time_gcf_divisor + time_gcf_mul_div + time_cf_reduce;
+			time_elapsed = time_gcf_matrix_divisor + time_gcf_mul_div + time_cf_reduce;
 
 			if (found) found = condition_c();
 
 			if ((time_elapsed - prev_time_elapsed > 10) || found)
 			{
 				prev_time_elapsed = time_elapsed;
+				const gfloat q_j_10 = _q_j.to_base10();
 				std::ostringstream ss;
-				ss << std::setprecision(3)
-					<< "j = " << _j << " (+" << _j - j_prev << "), n = " << n << " (+" << n - n_prev  << "), "
-					// << "M_max: " << M_max_size << ", M_min: " << M_min_size << ", Mgcf: " << Mgcf_size << ", "
-					// << "divisor: " << divisor_size << ", q_j: " << _q_j.get_byte_count() << ", " << std::endl
-					<< "memory size: " << _heap.get_max_size() * 2 / (1u << 20) << " MB, "
+				ss	<< "N = " << Nstr << ", j = " << _j << " (+" << _j - j_prev << "), q_j = " << _q_j.to_base10().to_string() << ", "
+					// << "M_max: " << M_max_size << ", M_min: " << M_min_size << ", Mgcf: " << Mgcf_size << ", divisor: " << divisor_size << ", "
+					<< "memory size: " << std::setprecision(3) << _heap.get_max_size() / (1u << 20) << " MB, "
+					<< "sum size: " << (M_max_size + Mgcf_size + divisor_size) / (1u << 20) << " MB, " << std::endl
 					<< "elapsed time: " << format_time(time_elapsed) << ": "
-					<< "gcf_matrix: " << time_gcf_matrix * 100 / time_elapsed << "%, "
-					<< "gcf_divisor: " << time_gcf_divisor * 100 / time_elapsed << "%, "
+					<< "gcf_matrix_divisor: " << time_gcf_matrix_divisor * 100 / time_elapsed << "%, "
 					<< "gcf_mul_div: " << time_gcf_mul_div * 100 / time_elapsed << "%, "
 					<< "cf_reduce: " << time_cf_reduce * 100 / time_elapsed << "%." << std::endl;
 				pio::print(ss.str());
-				j_prev = _j, n_prev = n;
+				j_prev = _j;	//, n_prev = n;
 			}
 
 			if (found) found = condition_d();
 		}
 
-		_N.reset(); _cond_b.reset(); _q_j.reset(); _q_jm1.reset(); _a_j.reset();
+		_N.reset(); _cond_b.reset(); _q_j_mod.reset(); _q_jm1_mod.reset(); _a_j.reset();
 	}
 };
 
@@ -344,12 +300,26 @@ int main()
 {
 	try
 	{
+		// We must have N | 2^8 * 3^5 * 5^4 * 7^3 * 11^2 * 13^2 * 17^2 * 19^2 * 23 * ... * 199,
+		// where the three dots represent the product of the primes between 23 and 199. See
+		// P. Moree, H. J. J. te Riele, and J. Urbanowicz,
+		// Divisibility properties of integers x, k satisfying 1^ + ... + (x − 1)^k = x^k,
+		// Math. Comp. 63 (1994), 799-815.
+
 		// N_max = 2^8 * 3^5 * 5^4 * 7^3
 		static const std::vector<uint32_t> fN = { 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 5, 5, 5, 5, 7, 7, 7 };
 
 		Heap heap;
 		CF cf(heap);
 
+		gint N;
+		for (size_t d = 0; d < fN.size(); ++d)
+		{
+			N = 1u; for (size_t i = 0; i < d; ++i) N *= fN[i];
+			cf.solve(N);
+		}
+
+		// Test all divisors of N_max
 		std::set<uint64_t> Nset;
 		for (uint64_t n2 = 1; n2 <= 256; n2 *= 2)
 			for (uint64_t n3 = 1; n3 <= 243; n3 *= 3)
@@ -357,7 +327,6 @@ int main()
 					for (uint64_t n7 = 1; n7 <= 343; n7 *= 7) Nset.insert(n2 * n3 * n5 * n7);
 		Nset.erase(1);
 
-		gint N;
 		for (const uint64_t n : Nset) { N = n; cf.solve(N); }
 	}
 	catch (const std::runtime_error & e)
