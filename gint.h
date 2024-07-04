@@ -31,9 +31,10 @@ class Heap
 private:
 	static size_t _size, _max_size;
 
+public:
 	static void * allocate_function(size_t size) { _size += size; _max_size = std::max(_max_size, _size); return malloc(size); }
 	static void * reallocate_function(void *ptr, size_t old_size, size_t new_size) { _size += new_size - old_size; _max_size = std::max(_max_size, _size); return realloc(ptr, new_size); }
-	static void free_function(void *ptr, size_t size) { _size -= size; _max_size = std::max(_max_size, _size); free(ptr); }
+	static void free_function(void *ptr, size_t size) { _size -= size; _max_size = std::max(_max_size, _size); if (size > 0) free(ptr); }
 
 public:
 	Heap() { mp_set_memory_functions(allocate_function, reallocate_function, free_function); }
@@ -51,47 +52,193 @@ size_t Heap::_size = 0, Heap::_max_size = 0;
 class gint
 {
 private:
+	// mpz_t has limit of 2^{31 + 6) bits (41 billion digits)
 	mpz_t _z;
 
+private:
+	void _allocate(const size_t size)
+	{
+		_z->_mp_alloc = size;
+		_z->_mp_d = (mp_limb_t *)Heap::allocate_function(size * sizeof(mp_limb_t));
+	}
+
+	void _reallocate(const size_t size)
+	{
+		// TODO: add block size and logic
+		_z->_mp_d = (mp_limb_t *)Heap::reallocate_function(_z->_mp_d, _z->_mp_alloc * sizeof(mp_limb_t), size * sizeof(mp_limb_t));
+		_z->_mp_alloc = size;
+	}
+
+	void _free()
+	{
+		Heap::free_function(_z->_mp_d, _z->_mp_alloc * sizeof(mp_limb_t));
+	}
+
 public:
-	gint() { mpz_init(_z); }
-	virtual ~gint() { mpz_clear(_z); }
-	gint(const gint & rhs) { mpz_init_set(_z, rhs._z); }
+	gint()
+	{
+		// mpz_init(_z);
 
-	void reset() { mpz_clear(_z); mpz_init(_z); }	// Free memory
+		_allocate(1);
+		_z->_mp_size = 0;
+	}
 
-	size_t get_word_count() const { return mpz_size(_z); }
+	virtual ~gint()
+	{
+		// mpz_clear(_z);
+
+		_free();
+	}
+
+	gint(const gint & rhs)
+	{
+		// mpz_init_set(_z, rhs._z);
+
+		_allocate(std::abs(rhs._z->_mp_size));
+		_z->_mp_size = rhs._z->_mp_size;
+
+		for (size_t i = 0, s = std::abs(_z->_mp_size); i < s; ++i) _z->_mp_d[i] = rhs._z->_mp_d[i];
+	}
+
+	void reset()
+	{
+		// mpz_clear(_z); mpz_init(_z);
+
+		_reallocate(1);
+		_z->_mp_size = 0;
+	}
+
+	size_t get_word_count() const { return std::abs(_z->_mp_size); }
 	size_t get_byte_count() const { return get_word_count() * sizeof(mp_limb_t); }
 
 	gint & operator = (const gint & rhs)
 	{
 		if (&rhs == this) return *this;
-		mpz_set(_z, rhs._z);
+		// mpz_set(_z, rhs._z);
+
+		_reallocate(std::abs(rhs._z->_mp_size));
+		_z->_mp_size = rhs._z->_mp_size;
+
+		for (size_t i = 0, s = std::abs(_z->_mp_size); i < s; ++i) _z->_mp_d[i] = rhs._z->_mp_d[i];
+
 		return *this;
 	}
 
-	gint & operator = (const uint32_t n) { mpz_set_ui(_z, n); return *this; }
-	gint & operator = (const uint64_t n) { mpz_set_ui_64(_z, n); return *this; }
+	gint & operator = (const uint64_t n)
+	{
+		// mpz_set_ui_64(_z, n);
 
-	gint & swap(gint & rhs) { mpz_swap(_z, rhs._z); return *this; }
+		_reallocate(1);
+		_z->_mp_size = (n == 0) ? 0 : 1;
+		_z->_mp_d[0] = n;
+		return *this;
+	}
 
-	int sgn() const { return mpz_sgn(_z); }
+	gint & swap(gint & rhs)
+	{
+		// mpz_swap(_z, rhs._z);
 
-	bool operator==(const gint & rhs) const { return (mpz_cmp(_z, rhs._z) == 0); }
-	bool operator!=(const gint & rhs) const { return (mpz_cmp(_z, rhs._z) != 0); }
-	bool operator>=(const gint & rhs) const { return (mpz_cmp(_z, rhs._z) >= 0); }
+		std::swap(_z->_mp_alloc, rhs._z->_mp_alloc);
+		std::swap(_z->_mp_size, rhs._z->_mp_size);
+		std::swap(_z->_mp_d, rhs._z->_mp_d);
+		return *this;
+	}
 
-	gint & operator+=(const uint32_t n) { mpz_add_ui(_z, _z, n); return *this; }
-	gint & operator-=(const uint32_t n) { mpz_sub_ui(_z, _z, n); return *this; }
-	gint & operator*=(const uint32_t n) { mpz_mul_ui(_z, _z, n); return *this; }
-	uint32_t operator%(const uint32_t n) const { return mpz_fdiv_ui(_z, n); }
+	int _cmp(const gint & rhs) const
+	{
+		if (_z->_mp_size != rhs._z->_mp_size) return (_z->_mp_size > rhs._z->_mp_size) ? 1 : -1;
+		const int ucmp = mpn_cmp(_z->_mp_d, rhs._z->_mp_d, std::abs(_z->_mp_size));
+		return (std::abs(_z->_mp_size) >= 0 ? ucmp : -ucmp);
+	}
+
+	bool operator==(const gint & rhs) const { return (_cmp(rhs) == 0); }
+	bool operator!=(const gint & rhs) const { return (_cmp(rhs) != 0); }
+	bool operator>=(const gint & rhs) const { return (_cmp(rhs) >= 0); }
+
+	void _add(const uint64_t n)	// _z->_mp_size > 0
+	{
+		const mp_limb_t carry = mpn_add_1(_z->_mp_d, _z->_mp_d, _z->_mp_size, n);
+		if (carry != 0)
+		{
+			_reallocate(_z->_mp_size + 1);
+			_z->_mp_d[_z->_mp_size] = carry;
+			_z->_mp_size += 1;
+		}
+	}
+
+	void _sub(const uint64_t n)	// _z->_mp_size > 0
+	{
+		if ((_z->_mp_size == 1) && (_z->_mp_d[0] < n))	// borrow
+		{
+			_z->_mp_d[0] = n - _z->_mp_d[0];
+			_z->_mp_size = -1;
+		}
+		else
+		{
+			mpn_sub_1(_z->_mp_d, _z->_mp_d, _z->_mp_size, n);
+			if (_z->_mp_d[_z->_mp_size - 1] == 0) _z->_mp_size -= 1;
+		}
+	}
+
+	void _mul(const uint64_t n)	// _z->_mp_size > 0
+	{
+		const mp_limb_t carry = mpn_mul_1(_z->_mp_d, _z->_mp_d, _z->_mp_size, n);
+		if (carry != 0)
+		{
+			_reallocate(_z->_mp_size + 1);
+			_z->_mp_d[_z->_mp_size] = carry;
+			_z->_mp_size += 1;
+		}
+	}
+
+	gint & operator+=(const uint64_t n)
+	{
+		// mpz_add_ui(_z, _z, n);
+
+		if (_z->_mp_size == 0) { *this = n; }
+		else if (_z->_mp_size > 0) _add(n);
+		else { _z->_mp_size = -_z->_mp_size; _sub(n); _z->_mp_size = -_z->_mp_size; }
+		return *this;
+	}
+
+	gint & operator-=(const uint64_t n)
+	{
+		// mpz_sub_ui(_z, _z, n);
+
+		if (_z->_mp_size == 0) { *this = n; _z->_mp_size = -_z->_mp_size; }
+		else if (_z->_mp_size > 0) _sub(n);
+		else { _z->_mp_size = -_z->_mp_size; _add(n); _z->_mp_size = -_z->_mp_size; }
+		return *this;
+	}
+
+	gint & operator*=(const uint64_t n)
+	{
+		// mpz_mul_ui(_z, _z, n);
+
+		if ((_z->_mp_size == 0) || (n == 0)) { *this = 0u; }
+
+		if (_z->_mp_size > 0) _mul(n);
+		else { _z->_mp_size = -_z->_mp_size; _mul(n); _z->_mp_size = -_z->_mp_size; }
+		return *this;
+	}
+
+	uint64_t operator%(const uint64_t n) const
+	{
+		// return mpz_fdiv_ui(_z, n);
+
+		if (n == 0) throw std::runtime_error("divide by zero");
+		if (_z->_mp_size == 0) return 0;
+		const mp_limb_t remainder = mpn_mod_1(_z->_mp_d, std::abs(_z->_mp_size), n);
+		if (remainder == 0) return 0;
+		return (_z->_mp_size < 0) ? n - remainder : remainder;
+	}
 
 	gint & operator+=(const gint & rhs) { mpz_add(_z, _z, rhs._z); return *this; }
 	gint & operator-=(const gint & rhs) { mpz_sub(_z, _z, rhs._z); return *this; }
 	gint & operator*=(const gint & rhs) { mpz_mul(_z, _z, rhs._z); return *this; }
 	gint & operator%=(const gint & rhs) { mpz_mod(_z, _z, rhs._z); return *this; }
 
-	gint & mul(const gint & x, const gint & y) { mpz_mul(_z, x._z, y._z); return *this; }
+	// gint & mul(const gint & x, const gint & y) { mpz_mul(_z, x._z, y._z); return *this; }
 	gint & addmul(const gint & x, const gint & y) { mpz_addmul(_z, x._z, y._z); return *this; }
 	gint & submul(const gint & x, const gint & y) { mpz_submul(_z, x._z, y._z); return *this; }
 	gint & div(const gint & x, const gint & y) { mpz_fdiv_q(_z, x._z, y._z); return *this; }
@@ -133,17 +280,18 @@ public:
 		return *this;
 	}
 
-	uint32_t nu(const uint32_t p) const
-	{
-		gint t = *this;
-		uint32_t a = 0; while (mpz_divisible_ui_p(t._z, p)) { mpz_divexact_ui(t._z, t._z, p); ++a; }
-		return a;
-	}
+	// uint32_t nu(const uint32_t p) const
+	// {
+	// 	gint t = *this;
+	// 	uint32_t a = 0; while (mpz_divisible_ui_p(t._z, p)) { mpz_divexact_ui(t._z, t._z, p); ++a; }
+	// 	return a;
+	// }
 
 	gfloat to_float() const
 	{
 		const size_t size = mpz_size(_z);
 		if (size == 0) return gfloat(0, 0);
+		const int sgn = mpz_sgn(_z);
 
 		// base 2
 		long double mantissa; size_t exponent;
@@ -152,7 +300,7 @@ public:
 		else { mantissa = std::ldexpl(limbs[size - 1], 64) + limbs[size - 2]; exponent = (size - 2) * sizeof(mp_limb_t) * 8; };
 		while (mantissa >= 1) { mantissa *= 0.5; ++exponent; }
 
-		return gfloat(mantissa, exponent);
+		return gfloat(sgn * mantissa, exponent);
 	}
 
 	std::string to_string() const

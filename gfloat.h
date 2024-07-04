@@ -39,10 +39,19 @@ private:
 public:
 	gfloat() {}
 	gfloat(const double mantissa, const size_t exponent) : _mantissa(mantissa), _exponent(exponent) {}
+	gfloat(const gfloat & rhs) : _mantissa(rhs._mantissa), _exponent(rhs._exponent) {}
+
 	virtual ~gfloat() {}
 
-	double get_mantissa() const { return _mantissa; }
-	size_t get_exponent() const { return _exponent; }
+	// double get_mantissa() const { return _mantissa; }
+	// size_t get_exponent() const { return _exponent; }
+
+	gfloat & operator = (const gfloat & rhs)
+	{
+		if (&rhs == this) return *this;
+		_mantissa = rhs._mantissa; _exponent = rhs._exponent;
+		return *this;
+	}
 
 	gfloat & operator+=(const gfloat & rhs)
 	{
@@ -64,23 +73,20 @@ public:
 	gfloat operator-(const gfloat & rhs) const { gfloat r = *this; r -= rhs; return r; }
 	gfloat operator*(const gfloat & rhs) const { gfloat r = *this; r *= rhs; return r; }
 
-	// convert to base 10
-	gfloat to_base10() const
+	std::string to_string() const
 	{
-		if (_mantissa == 0) return gfloat(0, 0);
+		if (_mantissa == 0) return "0";
+
+		// convert to base 10
 		const int sgn = (_mantissa < 0) ? -1 : 1;
 		const double m = std::fabs(_mantissa);
 		const long double lg10 = std::log10l(m) + _exponent * std::log10l(2.0L);
 		size_t exponent10 = uint64_t(lg10); double mantissa10 = std::pow(10.0, double(lg10 - exponent10));
+		while (mantissa10 < 1) { mantissa10 *= 10; --exponent10; if (exponent10 == 0) break; }
 		while (mantissa10 >= 10) { mantissa10 *= 0.1; ++exponent10; }
-		while (mantissa10 < 1) { mantissa10 *= 10; --exponent10; }
-		return gfloat(sgn * mantissa10, exponent10);
-	}
 
-	std::string to_string() const
-	{
 		std::ostringstream ss;
-		ss << std::setprecision(10) << _mantissa << "e+" << _exponent;
+		ss << std::setprecision(10) << sgn * mantissa10 << "e+" << exponent10;
 		return ss.str();
 	}
 };

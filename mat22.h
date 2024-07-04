@@ -35,6 +35,8 @@ public:
 	const gint & get21() const { return _a21; }
 	const gint & get22() const { return _a22; }
 
+	void reset() { _a11.reset(); _a12.reset(); _a21.reset(); _a22.reset(); }
+
 	void set_identity() { _a11 = 1u; _a12 = 0u; _a21 = 0u; _a22 = 1u; }
 
 	void set_gcf(const uint64_t n)
@@ -66,13 +68,13 @@ public:
 	{
 		gint t;
 
-		t.mul(_a11, rhs._a12);
+		t = _a11;
 		_a11 *= rhs._a11; _a11.addmul(_a12, rhs._a21);
-		t.addmul(_a12, rhs._a22); _a12.swap(t);
+		t *= rhs._a12; t.addmul(_a12, rhs._a22); _a12.swap(t);
 
-		t.mul(_a21, rhs._a12);
+		t = _a21;
 		_a21 *= rhs._a11; _a21.addmul(_a22, rhs._a21);
-		t.addmul(_a22, rhs._a22); _a22.swap(t);
+		t *= rhs._a12; t.addmul(_a22, rhs._a22); _a22.swap(t);
 
 		return *this;
 	}
@@ -81,13 +83,13 @@ public:
 	{
 		gint t;
 
-		t.mul(_a11, rhs._a12);
+		t = _a11;
 		_a11 *= rhs._a11; _a11.addmul(_a12, rhs._a21); _a11.divexact(d);
-		t.addmul(_a12, rhs._a22); _a12.swap(t); _a12.divexact(d);
+		t *= rhs._a12; t.addmul(_a12, rhs._a22); _a12.swap(t); _a12.divexact(d);
 
-		t.mul(_a21, rhs._a12);
+		t = _a21;
 		_a21 *= rhs._a11; _a21.addmul(_a22, rhs._a21); _a21.divexact(d);
-		t.addmul(_a22, rhs._a22); _a22.swap(t); _a22.divexact(d);
+		t *= rhs._a12; t.addmul(_a22, rhs._a22); _a22.swap(t); _a22.divexact(d);
 
 		return *this;
 	}
@@ -96,13 +98,13 @@ public:
 	{
 		gint t;
 
-		t.mul(_a11, rhs._a21);
+		t = _a11;
 		_a11 *= rhs._a11; _a11.addmul(_a21, rhs._a12);
-		t.addmul(_a21, rhs._a22); _a21.swap(t);
+		t *= rhs._a21; t.addmul(_a21, rhs._a22); _a21.swap(t);
 
-		t.mul(_a12, rhs._a21);
+		t = _a12;
 		_a12 *= rhs._a11; _a12.addmul(_a22, rhs._a12);
-		t.addmul(_a22, rhs._a22); _a22.swap(t);
+		t *= rhs._a21; t.addmul(_a22, rhs._a22); _a22.swap(t);
 
 		return *this;
 	}

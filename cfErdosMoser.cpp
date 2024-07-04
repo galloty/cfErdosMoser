@@ -65,14 +65,13 @@ private:
 			}
 
 			d = 1u;
-			gint d_i;
 			for (uint64_t i = 0; i < size; ++i)
 			{
 				const uint64_t n_i = n + i;
 				const uint64_t p = _factor.smallest(n_i);
 				// if n_i = p^k is a prime power then pp = p else pp = 1 (exponential of Mangoldt function).
 				uint64_t m = 1; if (p != n_i) { m = n_i; while (m % p == 0) m /= p; }
-				d_i = (m == 1) ? n_i / p : n_i;	// divides by pp
+				const uint64_t d_i = (m == 1) ? n_i / p : n_i;	// divides by pp
 				d *= d_i;
 			}
 		}
@@ -166,13 +165,13 @@ private:
 
 		const gfloat f11 = Mcf.get11().to_float(), f12 = Mcf.get12().to_float();
 		const gfloat f21 = Mcf.get21().to_float(), f22 = Mcf.get22().to_float();
-		const gfloat tf = f11 * _q_jm1 + f12 * _q_j;
-		_q_j = f22 * _q_j + f21 * _q_jm1; _q_jm1 = tf;
+		const gfloat tf = f11 * _q_jm1 - f12 * _q_j;
+		_q_j = f22 * _q_j - f21 * _q_jm1; _q_jm1 = tf;
 
 		// Update the denominators of the regular continued fraction q_{j-1} and q_j
-		Mcf %= _mod_q;
-		gint ti; ti.mul(Mcf.get11(), _q_jm1_mod); ti.addmul(Mcf.get12(), _q_j_mod);
-		_q_j_mod *= Mcf.get22(); _q_j_mod.addmul(Mcf.get21(), _q_jm1_mod); _q_jm1_mod.swap(ti);
+		// Mcf %= _mod_q;
+		gint ti = _q_jm1_mod; ti *= Mcf.get11(); ti.submul(Mcf.get12(), _q_j_mod);
+		_q_j_mod *= Mcf.get22(); _q_j_mod.submul(Mcf.get21(), _q_jm1_mod); _q_jm1_mod.swap(ti);
 		_q_j_mod %= _mod_q; _q_jm1_mod %= _mod_q;
 
 		return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
@@ -181,7 +180,7 @@ private:
 	bool condition_c() const
 	{
 		const gint & q_j = _q_jm1_mod;	// a step backward
-		const uint32_t g6 = q_j % 6u;
+		const uint64_t g6 = q_j % 6u;
 		return ((g6 == 1) || (g6 == 5));	// (c) gcd(q_{j , 6) = 1
 	}
 
@@ -193,16 +192,16 @@ private:
 		const gint & q_j_mod = _q_jm1_mod;
 		const gfloat & q_j = _q_jm1;
 
-		const uint32_t g6 = q_j_mod % 6u;
+		const uint64_t g6 = q_j_mod % 6u;
 
 		std::ostringstream ss;
 		ss << _N.to_string() << ", " << j << ", " << a_jp1.to_string() << ", "
-		   << q_j.to_base10().to_string() << ", " << ((g6 == 1) ? "+" : "-") << "1";
+		   << q_j.to_string() << ", " << ((g6 == 1) ? "+" : "-") << "1";
 
 		bool cond_d = true;
 		for (const uint32_t p : _P_pr3)
 		{
-			const uint32_t r = q_j_mod % (p * p);
+			const uint64_t r = q_j_mod % (p * p);
 			if ((r != 0) && (r % p == 0)) { cond_d = false; ss << ", " << p; break; }
 		}
 		ss << std::endl;
@@ -242,8 +241,8 @@ public:
 
 		const std::string Nstr = N.to_string();
 		double time_gcf_matrix_divisor = 0, time_gcf_mul_div = 0, time_cf_reduce = 0, time_elapsed = 0, prev_time_elapsed = 0;
-		size_t M_min_size = 0, Mgcf_size = 0, divisor_size = 0, M_max_size = 0;
-		uint64_t j_prev = _j;	//, n_prev = n;
+		size_t M_min_size = 0, Mgcf_size = 0;	// divisor_size = 0, M_max_size = 0;
+		uint64_t j_prev = _j;
 
 		bool found = false;
 		while (!found)
@@ -254,13 +253,13 @@ public:
 				Mat22 Mgcf; gint divisor;
 				time_gcf_matrix_divisor += gcf_matrix_divisor(Mgcf, divisor, n, nstep);
 				Mgcf_size = Mgcf.get_byte_count();
-				divisor_size = divisor.get_byte_count();
+				// divisor_size = divisor.get_byte_count();
 
 				time_gcf_mul_div += gcf_mul_div(M, Mgcf, divisor);
 			}
 			n += nstep;
 
-			M_max_size = M.get_byte_count();
+			// M_max_size = M.get_byte_count();
 
 			time_cf_reduce += cf_reduce(M, found);
 
@@ -276,22 +275,23 @@ public:
 			{
 				prev_time_elapsed = time_elapsed;
 				std::ostringstream ss;
-				ss	<< "N = " << Nstr << ", j = " << _j << " (+" << _j - j_prev << "), q_j = " << _q_j.to_base10().to_string() << ", "
+				ss	<< "N = " << Nstr << ", n = " << n << " [" << nstep << "], j = " << _j << " (+" << _j - j_prev << "), q_j = " << _q_j.to_string() << ", "
 					// << "M_max: " << M_max_size << ", M_min: " << M_min_size << ", Mgcf: " << Mgcf_size << ", divisor: " << divisor_size << ", "
 					<< "memory size: " << std::setprecision(3) << _heap.get_max_size() / (1u << 20) << " MB, "
-					<< "sum size: " << (M_max_size + Mgcf_size + divisor_size) / (1u << 20) << " MB, " << std::endl
-					<< "elapsed time: " << format_time(time_elapsed) << ": "
-					<< "gcf_matrix_divisor: " << time_gcf_matrix_divisor * 100 / time_elapsed << "%, "
-					<< "gcf_mul_div: " << time_gcf_mul_div * 100 / time_elapsed << "%, "
-					<< "cf_reduce: " << time_cf_reduce * 100 / time_elapsed << "%." << std::endl;
+					<< "elapsed time: " << format_time(time_elapsed) << "." << std::endl;
+					// << "gcf_matrix_divisor: " << time_gcf_matrix_divisor * 100 / time_elapsed << "%, "
+					// << "gcf_mul_div: " << time_gcf_mul_div * 100 / time_elapsed << "%, "
+					// << "cf_reduce: " << time_cf_reduce * 100 / time_elapsed << "%." << std::endl;
 				pio::print(ss.str());
-				j_prev = _j;	//, n_prev = n;
+				j_prev = _j;
 			}
 
 			if (found) found = condition_d();
 		}
 
-		_N.reset(); _cond_b.reset(); _q_j_mod.reset(); _q_jm1_mod.reset(); _a_j.reset();
+		_N.reset(); _cond_b.reset(); _mod_q.reset(); _q_j_mod.reset(); _q_jm1_mod.reset(); _a_j.reset();
+		M.reset();
+		std::cout << "Memory size: " << _heap.get_size() << " B." << std::endl;
 	}
 };
 
@@ -307,6 +307,8 @@ int main()
 
 		// N_max = 2^8 * 3^5 * 5^4 * 7^3
 		static const std::vector<uint32_t> fN = { 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 5, 5, 5, 5, 7, 7, 7 };
+
+		if (sizeof(mp_limb_t) < 8) throw std::runtime_error("32-bit computing is not supported");
 
 		Heap heap;
 		CF cf(heap);

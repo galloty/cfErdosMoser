@@ -19,7 +19,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 class Factor
 {
 private:
-	static const uint32_t sp_max = uint32_t(1) << 19;
+	static const uint32_t sp_max = 1u << 19;
 	static const size_t sieve_size = sp_max / 2;	// sieve using odd primes
 	static const uint64_t n_max = sp_max * uint64_t(sp_max);
 
@@ -28,7 +28,7 @@ private:
 	uint32_t _factor[sieve_size];
 	uint64_t _n, _j;
 
-	void step()
+	void _step()
 	{
 		for (size_t k = 0; k < sieve_size; ++k) _factor[k] = 0;
 
@@ -41,15 +41,15 @@ private:
 		}
 	}
 
-	void reset()
+	void _reset()
 	{
 		for (size_t i = 0, size = _prm.size(); i < size; ++i) _prm_ptr[i] = (_prm[i] >> 1) + size_t(_prm[i]);
-		step();
+		_step();
 		_j = 0;
 	}
 
 public:
-	void init() { _n = 1; reset(); }
+	void init() { _n = 1; _reset(); }
 
 	Factor()
 	{
@@ -72,7 +72,7 @@ public:
 	uint64_t smallest(const uint64_t n)
 	{
 		if (n % 2 == 0) return 2;
-		if (n < _n) { std::cerr << "Warning: reset Factor." << std::endl; reset(); }
+		if (n < _n) { std::cerr << "Warning: reset Factor." << std::endl; _reset(); }
 		if (n >= n_max)
 		{
 			std::ostringstream ss; ss << "Factor max input is " << n_max;
@@ -81,7 +81,7 @@ public:
 
 		const uint64_t j = n / sp_max;
 		_n = n;
-		while (_j < j) { step(); ++_j; }
+		while (_j < j) { _step(); ++_j; }
 		const uint64_t f = _factor[(n % sp_max) / 2];
 
 		return (f == 0) ? n : f;
