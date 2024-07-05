@@ -17,6 +17,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <set>
 
 #include "factor.h"
+#include "mod64.h"
 #include "gfloat.h"
 #include "gint.h"
 #include "mat22.h"
@@ -30,12 +31,14 @@ class CF
 {
 private:
 	Heap & _heap;
-	gint _N, _cond_b, _mod_q, _q_j_mod, _q_jm1_mod, _a_j;
+	gint _N, _cond_b, _a_j;
 	gfloat _q_j, _q_jm1;
+	uint64_t _q_j_mod, _q_jm1_mod;
 	uint64_t _j;
 	Factor _factor;
 	// { p : 3 is a primitive root modulo p } such that 6 * (5*7*17*19*29*31*43)^2 < 2^64
 	const std::vector<uint32_t> _P_pr3 = { 5, 7, 17, 19, 29, 31, 43 };
+	static const uint64_t _mod_q = 6 * uint64_t(5*7*17*19*29*31*43) * (5*7*17*19*29*31*43);
 
 public:
 	CF(Heap & heap) : _heap(heap) {}
@@ -169,17 +172,18 @@ private:
 		_q_j = f22 * _q_j - f21 * _q_jm1; _q_jm1 = tf;
 
 		// Update the denominators of the regular continued fraction q_{j-1} and q_j
-		// Mcf %= _mod_q;
-		gint ti = _q_jm1_mod; ti *= Mcf.get11(); ti.submul(Mcf.get12(), _q_j_mod);
-		_q_j_mod *= Mcf.get22(); _q_j_mod.submul(Mcf.get21(), _q_jm1_mod); _q_jm1_mod.swap(ti);
-		_q_j_mod %= _mod_q; _q_jm1_mod %= _mod_q;
+		const uint64_t i11 = Mcf.get11() % _mod_q, i12 = Mcf.get12() % _mod_q;
+		const uint64_t i21 = Mcf.get21() % _mod_q, i22 = Mcf.get22() % _mod_q;
+		Mod64 mod64(_mod_q);
+		const uint64_t ti = mod64.sub(mod64.mul(i11, _q_jm1_mod), mod64.mul(i12, _q_j_mod));
+		_q_j_mod = mod64.sub(mod64.mul(i22, _q_j_mod), mod64.mul(i21, _q_jm1_mod)); _q_jm1_mod = ti;
 
 		return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
 	}
 
 	bool condition_c() const
 	{
-		const gint & q_j = _q_jm1_mod;	// a step backward
+		const uint64_t q_j = _q_jm1_mod;	// a step backward
 		const uint64_t g6 = q_j % 6u;
 		return ((g6 == 1) || (g6 == 5));	// (c) gcd(q_{j , 6) = 1
 	}
@@ -189,7 +193,7 @@ private:
 		// a step backward
 		const uint64_t j = _j - 1;
 		const gint & a_jp1 = _a_j;
-		const gint & q_j_mod = _q_jm1_mod;
+		const uint64_t q_j_mod = _q_jm1_mod;
 		const gfloat & q_j = _q_jm1;
 
 		const uint64_t g6 = q_j_mod % 6u;
@@ -217,7 +221,6 @@ public:
 
 		_N = N;
 		_cond_b = N; _cond_b *= 180; _cond_b -= 2u;
-		_mod_q = 6u; for (const uint32_t p : _P_pr3) _mod_q *= p * p;
 
 		_factor.init();
 
@@ -289,7 +292,7 @@ public:
 			if (found) found = condition_d();
 		}
 
-		_N.reset(); _cond_b.reset(); _mod_q.reset(); _q_j_mod.reset(); _q_jm1_mod.reset(); _a_j.reset();
+		_N.reset(); _cond_b.reset(); _a_j.reset();
 		M.reset();
 		std::cout << "Memory size: " << _heap.get_size() << " B." << std::endl;
 	}

@@ -55,56 +55,51 @@ public:
 		return *this;
 	}
 
-	Mat22 & operator+=(const Mat22 & rhs)
-	{
-		_a11 += rhs._a11; _a12 += rhs._a12;
-		_a21 += rhs._a21; _a22 += rhs._a22;
-		return *this;
-	}
-
-	Mat22 & operator%=(const gint & m) { _a11 %= m; _a12 %= m; _a21 %= m; _a22 %= m; return *this; }
-
 	Mat22 & mul_right(const Mat22 & rhs)
 	{
-		gint t;
+		gint t1, t2;
 
-		t = _a11;
-		_a11 *= rhs._a11; _a11.addmul(_a12, rhs._a21);
-		t *= rhs._a12; t.addmul(_a12, rhs._a22); _a12.swap(t);
+		t1.mul(_a11, rhs._a12); t2.mul(_a12, rhs._a22); t1 += t2;
+		_a11 *= rhs._a11; _a12 *= rhs._a21; _a11 += _a12;
+		_a12.swap(t1);
 
-		t = _a21;
-		_a21 *= rhs._a11; _a21.addmul(_a22, rhs._a21);
-		t *= rhs._a12; t.addmul(_a22, rhs._a22); _a22.swap(t);
+		t1.mul(_a21, rhs._a12); t2.mul(_a22, rhs._a22); t1 += t2;
+		_a21 *= rhs._a11; _a22 *= rhs._a21; _a21 += _a22;
+		_a22.swap(t1);
 
 		return *this;
 	}
 
 	Mat22 & mul_right_div(const Mat22 & rhs, const gint & d)
 	{
-		gint t;
+		gint t1, t2;
 
-		t = _a11;
-		_a11 *= rhs._a11; _a11.addmul(_a12, rhs._a21); _a11.divexact(d);
-		t *= rhs._a12; t.addmul(_a12, rhs._a22); _a12.swap(t); _a12.divexact(d);
+		t1.mul(_a11, rhs._a12); t2.mul(_a12, rhs._a22); t1 += t2; t2.reset();
+		_a11 *= rhs._a11; _a12 *= rhs._a21; _a11 += _a12;
+		_a12.swap(t1);
 
-		t = _a21;
-		_a21 *= rhs._a11; _a21.addmul(_a22, rhs._a21); _a21.divexact(d);
-		t *= rhs._a12; t.addmul(_a22, rhs._a22); _a22.swap(t); _a22.divexact(d);
+		t1.mul(_a21, rhs._a12); t2.mul(_a22, rhs._a22); t1 += t2; t2.reset();
+		_a21 *= rhs._a11; _a22 *= rhs._a21; _a21 += _a22;
+		_a22.swap(t1);
 
+		t1.divrem(_a11, d, t2); t1.swap(_a11); if (!t2.is_zero()) throw std::runtime_error("divexact failed");
+		t1.divrem(_a12, d, t2); t1.swap(_a12); if (!t2.is_zero()) throw std::runtime_error("divexact failed");
+		t1.divrem(_a21, d, t2); t1.swap(_a21); if (!t2.is_zero()) throw std::runtime_error("divexact failed");
+		t1.divrem(_a22, d, t2); t1.swap(_a22); if (!t2.is_zero()) throw std::runtime_error("divexact failed");
 		return *this;
 	}
 
 	Mat22 & mul_left(const Mat22 & rhs)
 	{
-		gint t;
+		gint t1, t2;
 
-		t = _a11;
-		_a11 *= rhs._a11; _a11.addmul(_a21, rhs._a12);
-		t *= rhs._a21; t.addmul(_a21, rhs._a22); _a21.swap(t);
+		t1.mul(_a11, rhs._a21); t2.mul(_a21, rhs._a22); t1 += t2;
+		_a11 *= rhs._a11; _a21 *= rhs._a12; _a11 += _a21;
+		_a21.swap(t1);
 
-		t = _a12;
-		_a12 *= rhs._a11; _a12.addmul(_a22, rhs._a12);
-		t *= rhs._a21; t.addmul(_a22, rhs._a22); _a22.swap(t);
+		t1.mul(_a12, rhs._a21); t2.mul(_a22, rhs._a22); t1 += t2;
+		_a12 *= rhs._a11; _a22 *= rhs._a12; _a12 += _a22;
+		_a22.swap(t1);
 
 		return *this;
 	}
@@ -136,25 +131,27 @@ public:
 
 	void cf_mul(const gint & coefficient)
 	{
-		_a11.submul(coefficient, _a21); _a11.swap(_a21);
-		_a12.submul(coefficient, _a22); _a12.swap(_a22);
+		gint t;
+		t.mul(coefficient, _a21); _a11 -= t; _a11.swap(_a21);
+		t.mul(coefficient, _a22); _a12 -= t; _a12.swap(_a22);
 	}
 
 	void cf_mul_revert(const gint & coefficient)
 	{
-		_a11.swap(_a21); _a11.addmul(coefficient, _a21);
-		_a12.swap(_a22); _a12.addmul(coefficient, _a22);
+		gint t;
+		_a11.swap(_a21); t.mul(coefficient, _a21); _a11 += t;
+		_a12.swap(_a22); t.mul(coefficient, _a22); _a12 += t;
 	}
 
 	bool get_cf_coefficient(gint & coefficient1, gint & coefficient2)
 	{
-		gint t;
+		gint t, r;
 
-		coefficient1.div(_a11, _a21); t.div(_a12, _a22);
+		coefficient1.divrem(_a11, _a21, r); t.divrem(_a12, _a22, r);
 		if (coefficient1 != t) return false;
 		cf_mul(coefficient1);
 
-		coefficient2.div(_a11, _a21); t.div(_a12, _a22);
+		coefficient2.divrem(_a11, _a21, r); t.divrem(_a12, _a22, r);
 		const bool success = (coefficient2 == t);
 		if (success) cf_mul(coefficient2); else cf_mul_revert(coefficient1);
 		return success;
