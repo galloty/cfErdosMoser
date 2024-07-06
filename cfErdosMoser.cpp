@@ -280,11 +280,13 @@ public:
 				std::ostringstream ss;
 				ss	<< "N = " << Nstr << ", n = " << n << " [" << nstep << "], j = " << _j << " (+" << _j - j_prev << "), q_j = " << _q_j.to_string() << ", "
 					// << "M_max: " << M_max_size << ", M_min: " << M_min_size << ", Mgcf: " << Mgcf_size << ", divisor: " << divisor_size << ", "
-					<< "memory size: " << std::setprecision(3) << _heap.get_max_size() / (1u << 20) << " MB, "
-					<< "elapsed time: " << format_time(time_elapsed) << "." << std::endl;
-					// << "gcf_matrix_divisor: " << time_gcf_matrix_divisor * 100 / time_elapsed << "%, "
-					// << "gcf_mul_div: " << time_gcf_mul_div * 100 / time_elapsed << "%, "
-					// << "cf_reduce: " << time_cf_reduce * 100 / time_elapsed << "%." << std::endl;
+					<< "memory size: " << std::setprecision(3)
+					<< _heap.get_max_size() / (1u << 20) << " + " << _heap.get_max_size_gmp() / (1u << 20) << " MB ("
+					<< _heap.get_max_block_size() / (1u << 20) << " + " << _heap.get_max_block_size_gmp() / (1u << 20) << " MB), "
+					<< "elapsed time: " << format_time(time_elapsed) << " ("	// "." << std::endl;
+					<< time_gcf_matrix_divisor * 100 / time_elapsed << "% + "
+					<< time_gcf_mul_div * 100 / time_elapsed << "% + "
+					<< time_cf_reduce * 100 / time_elapsed << "%)." << std::endl;
 				pio::print(ss.str());
 				j_prev = _j;
 			}
@@ -294,7 +296,7 @@ public:
 
 		_N.reset(); _cond_b.reset(); _a_j.reset();
 		M.reset();
-		std::cout << "Memory size: " << _heap.get_size() << " B." << std::endl;
+		std::cout << "Memory size: " << _heap.get_size() << " + " << _heap.get_size_gmp() << " B." << std::endl;
 	}
 };
 
