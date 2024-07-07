@@ -110,8 +110,8 @@ public:
 		// If hi.a_21 = (a_21 >> (n * GMP_LIMB_BITS)) + 1 then hi.a_11/hi.a_21 < a_11/a_21.
 		// If hi.a_12 = (a_12 >> (n * GMP_LIMB_BITS)) + 1 then hi.a_12/hi.a_22 > a_12/a_22.
 		// Since a_11/a_21 < alpha < a_12/a_22, we still have hi.a_11/hi.a_21 < alpha < hi.a_12/hi.a_22.
-		_a11.split(lo._a11, n, false); _a12.split(lo._a12, n, true);
-		_a21.split(lo._a21, n, true); _a22.split(lo._a22, n, false);
+		_a11.split(lo._a11, n); _a12.split(lo._a12, n); _a12 += 1u;
+		_a21.split(lo._a21, n); _a21 += 1u; _a22.split(lo._a22, n);
 	}
 
 	void combine(const Mat22 & lo, const Mat22 & Ml, const size_t n)

@@ -11,62 +11,10 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <stdexcept>
 #include <string>
 
-#include <gmp.h>
-
+#include "g_low_level.h"
 #include "gfloat.h"
 
-// Low-level implemented using GMP functions. But on Windows, mpn has limit of 2^(31 + 6) bits (41 billion digits).
-
-inline int g_cmp(const mp_limb_t * const s1p, const mp_limb_t * const s2p, const size_t n)
-{
-	return mpn_cmp(s1p, s2p, mp_size_t(n));
-}
-
-inline mp_limb_t g_add_1(mp_limb_t * const rp, const mp_limb_t * const s1p, const size_t n, const mp_limb_t s2limb)
-{
-	return mpn_add_1(rp, s1p, mp_size_t(n), s2limb);
-}
-
-inline mp_limb_t g_sub_1(mp_limb_t * const rp, const mp_limb_t * const s1p, const size_t n, const mp_limb_t s2limb)
-{
-	return mpn_sub_1(rp, s1p, mp_size_t(n), s2limb);
-}
-
-inline mp_limb_t g_mul_1(mp_limb_t * const rp, const mp_limb_t * const s1p, const size_t n, const mp_limb_t s2limb)
-{
-	return mpn_mul_1(rp, s1p, mp_size_t(n), s2limb);
-}
-
-inline mp_limb_t g_mod_1(const mp_limb_t * const s1p, const mp_size_t s1n, const mp_limb_t s2limb)
-{
-	return mpn_mod_1(s1p, mp_size_t(s1n), s2limb);
-}
-
-inline mp_limb_t g_add(mp_limb_t * const rp, const mp_limb_t * const s1p, const size_t s1n, const mp_limb_t * const s2p, const size_t s2n)
-{
-	return mpn_add(rp, s1p, mp_size_t(s1n), s2p, mp_size_t(s2n));
-}
-
-inline mp_limb_t g_sub(mp_limb_t * const rp, const mp_limb_t * const s1p, const size_t s1n, const mp_limb_t * const s2p, const size_t s2n)
-{
-	return mpn_sub(rp, s1p, mp_size_t(s1n), s2p, mp_size_t(s2n));
-}
-
-inline mp_limb_t g_mul(mp_limb_t * const rp, const mp_limb_t * const s1p, const size_t s1n, const mp_limb_t * const s2p, const size_t s2n)
-{
-	return mpn_mul(rp, s1p, mp_size_t(s1n), s2p, mp_size_t(s2n));
-}
-
-inline void g_tdiv_qr(mp_limb_t * const qp, mp_limb_t * const rp, const size_t qxn, const mp_limb_t * const np, const size_t nn, const mp_limb_t * const dp, const size_t dn)
-{
-	mpn_tdiv_qr(qp, rp, mp_size_t(qxn), np, mp_size_t(nn), dp, mp_size_t(dn));
-}
-
-inline size_t g_get_str(unsigned char * const str, mp_limb_t * const s1p, const size_t s1n)
-{
-	return (size_t)mpn_get_str(str, 10, s1p, mp_size_t(s1n));
-}
-
+// Memory allocation
 class Heap
 {
 private:
@@ -134,13 +82,13 @@ private:
 	size_t _alloc;
 	size_t _size;
 	bool _is_positive;
-	mp_limb_t * _d;
+	uint64_t * _d;
 
 private:
-	void _allocate(const size_t size)
+	void _allocate()
 	{
-		_alloc = (size / 1024 + 1) * 1024;
-		_d = (mp_limb_t *)Heap::allocate_function(_alloc * sizeof(mp_limb_t));
+		_alloc = (_size / 1024 + 1) * 1024;
+		_d = (uint64_t *)Heap::allocate_function(_alloc * sizeof(uint64_t));
 	}
 
 	void _reallocate(const size_t size, const bool forced = false)
@@ -148,26 +96,21 @@ private:
 		if ((size > _alloc) || (_alloc - size > 1024 * 1024) || forced)
 		{
 			const size_t alloc = (size / 1024 + 1) * 1024;
-			_d = (mp_limb_t *)Heap::reallocate_function(_d, _alloc * sizeof(mp_limb_t), alloc * sizeof(mp_limb_t));
+			_d = (uint64_t *)Heap::reallocate_function(_d, _alloc * sizeof(uint64_t), alloc * sizeof(uint64_t));
 			_alloc = alloc;
 		}
 	}
 
 	void _free()
 	{
-		Heap::free_function(_d, _alloc * sizeof(mp_limb_t));
+		Heap::free_function(_d, _alloc * sizeof(uint64_t));
 	}
 
 	void _norm()
 	{
-		const mp_limb_t * const d = _d;
+		const uint64_t * const d = _d;
 		size_t size = _size; while ((size > 0) && (d[size - 1] == 0)) --size;
 		_size = size;
-	}
-
-	static void _copy(mp_limb_t * const dst, const mp_limb_t * const src, const size_t size)
-	{
-		for (size_t i = 0; i < size; ++i) dst[i] = src[i];
 	}
 
 	void _neg() { _is_positive = !_is_positive; }
@@ -185,8 +128,8 @@ private:
 		}
 		if (rsize == 0) return is_positive ? 1 : -1;
 
-		if (is_positive != ris_positive) return is_positive ? 1 : -1;
 		const int sgn = is_positive ? 1 : -1;
+		if (is_positive != ris_positive) return sgn;
 		if (size != rsize) return (size > rsize) ? sgn : -sgn;
 		const int ucmp = g_cmp(_d, rhs._d, size);
 		return is_positive ? ucmp : -ucmp;
@@ -195,21 +138,21 @@ private:
 	void _uadd(const uint64_t n)
 	{
 		const size_t size = _size;
-		mp_limb_t * const d = _d;
+		uint64_t * const d = _d;
 
-		const mp_limb_t carry = g_add_1(d, d, size, n);
+		const uint64_t carry = g_add_1(d, d, size, n);
 		if (carry != 0)
 		{
+			++_size;
 			_reallocate(size + 1);
 			_d[size] = carry;
-			++_size;
 		}
 	}
 
 	void _usub(const uint64_t n)
 	{
 		const size_t size = _size;
-		mp_limb_t * const d = _d;
+		uint64_t * const d = _d;
 
 		if ((size == 1) && (d[0] < n))	// borrow
 		{
@@ -226,14 +169,14 @@ private:
 	void _umul(const uint64_t n)
 	{
 		const size_t size = _size;
-		mp_limb_t * const d = _d;
+		uint64_t * const d = _d;
 
-		const mp_limb_t carry = g_mul_1(d, d, size, n);
+		const uint64_t carry = g_mul_1(d, d, size, n);
 		if (carry != 0)
 		{
+			++_size;
 			_reallocate(size + 1);
 			_d[size] = carry;
-			++_size;
 		}
 	}
 
@@ -244,8 +187,8 @@ private:
 		const size_t new_size = std::max(size, rsize);
 		_reallocate(new_size + 1);
 
-		mp_limb_t * const d = _d;
-		const mp_limb_t carry = (size >= rsize) ? g_add(d, d, size, rhs._d, rsize) : g_add(d, rhs._d, rsize, d, size);
+		uint64_t * const d = _d;
+		const uint64_t carry = (size >= rsize) ? g_add(d, d, size, rhs._d, rsize) : g_add(d, rhs._d, rsize, d, size);
 		_size = new_size;
 		if (carry != 0)
 		{
@@ -260,22 +203,20 @@ private:
 
 		if (size > rsize)
 		{
-			mp_limb_t * const d = _d;
-			g_sub(d, d, size, rhs._d, rsize);
-			if (d[size - 1] == 0) --_size;
+			g_sub(_d, _d, size, rhs._d, rsize);
+			_norm();
 		}
 		else if (size < rsize)
 		{
 			_reallocate(rsize);
-			mp_limb_t * const d = _d;
-			g_sub(d, rhs._d, rsize, d, size);
+			g_sub(_d, rhs._d, rsize, _d, size);
 			_size = rsize;
-			if (d[rsize - 1] == 0) _size -= 1;
+			_norm();
 			_is_positive = false;
 		}
 		else
 		{
-			mp_limb_t * const d = _d;
+			uint64_t * const d = _d;
 			const int cmp = g_cmp(d, rhs._d, size);
 			if (cmp > 0)
 			{
@@ -307,33 +248,29 @@ private:
 public:
 	gint()
 	{
-		_allocate(1);
 		_size = 0;
+		_allocate();
 		_is_positive = true;
-	}
-
-	virtual ~gint()
-	{
-		_free();
 	}
 
 	gint(const gint & rhs)
 	{
-		const size_t size = rhs._size;
-		_allocate(std::max(size, size_t(1)));
-		_size = size;
+		_size = rhs._size;
+		_allocate();
 		_is_positive = rhs._is_positive;
 
-		_copy(_d, rhs._d, size);
+		g_copy(_d, rhs._d, _size);
 	}
 
 	gint(const uint64_t n)
 	{
-		_allocate(1);
 		_size = (n == 0) ? 0 : 1;
+		_allocate();
 		_is_positive = true;
 		_d[0] = n;
 	}
+
+	virtual ~gint() { _free(); }
 
 	void reset()
 	{
@@ -343,7 +280,7 @@ public:
 	}
 
 	size_t get_word_count() const { return _size; }
-	size_t get_byte_count() const { return get_word_count() * sizeof(mp_limb_t); }
+	size_t get_byte_count() const { return get_word_count() * sizeof(uint64_t); }
 
 	gint & operator = (const uint64_t n)
 	{
@@ -363,7 +300,7 @@ public:
 		_size = size;
 		_is_positive = rhs._is_positive;
 
-		_copy(_d, rhs._d, size);
+		g_copy(_d, rhs._d, size);
 
 		return *this;
 	}
@@ -408,7 +345,7 @@ public:
 	{
 		if (n == 0) throw std::runtime_error("divide by zero");
 		if (_size == 0) return 0;
-		const mp_limb_t remainder = g_mod_1(_d, _size, n);
+		const uint64_t remainder = g_mod_1(_d, _size, n);
 		if (remainder == 0) return 0;
 		return _is_positive ? remainder : n - remainder;
 	}
@@ -435,7 +372,7 @@ public:
 
 		const size_t new_size = x._size + y._size;
 		_reallocate(new_size);
-		const mp_limb_t carry = (x._size >= y._size) ? g_mul(_d, x._d, x._size, y._d, y._size) : g_mul(_d, y._d, y._size, x._d, x._size);
+		const uint64_t carry = (x._size >= y._size) ? g_mul(_d, x._d, x._size, y._d, y._size) : g_mul(_d, y._d, y._size, x._d, x._size);
 		_size = (carry == 0) ? new_size - 1 : new_size;
 		_is_positive = (x._is_positive == y._is_positive);
 		return *this;
@@ -455,47 +392,36 @@ public:
 
 		if (y._size > x._size) { r = x; *this = 0u; return *this; }
 
-		const size_t q_size = x._size - y._size + 1, r_size = y._size;
-
-		_reallocate(q_size); r._reallocate(r_size);
-		g_tdiv_qr(_d, r._d, 0u, x._d, x._size, y._d, y._size);
-
-		_size = q_size;
-		while ((_size > 0) && (_d[_size - 1] == 0)) --_size;
-
-		r._size = r_size;
-		while ((r._size > 0) && (r._d[r._size - 1] == 0)) --r._size;
-
+		_size = x._size - y._size + 1; r._size = y._size;
+		_reallocate(_size); r._reallocate(r._size);
+		g_tdiv_qr(_d, r._d, x._d, x._size, y._d, y._size);
+		_norm(); r._norm();
 		return *this;
 	}
 
 	gint & lshift(const size_t n)
 	{
 		if (_size == 0) return *this;
-		_reallocate(_size + n);
-		for (size_t i = 0, j = _size - 1; i < _size; ++i, --j) _d[j + n] = _d[j];
-		for (size_t i = 0; i < n; ++i) _d[i] = 0;
 		_size += n;
+		_reallocate(_size);
+		g_copy_rev(&_d[n], _d, _size - n);
+		g_zero(_d, n);
 		return *this;
 	}
 
-	void split(gint & lo, const size_t n, const bool fix_roundoff)
+	void split(gint & lo, const size_t n)
 	{
 		if (!_is_positive || (n >= _size)) throw std::runtime_error("split failed");
 
-		size_t size_lo = n;
-		lo._reallocate(size_lo);
-		for (size_t i = 0; i < n; ++i) lo._d[i] = _d[i];
-		while ((size_lo > 0) && (lo._d[size_lo - 1] == 0)) --size_lo;
-		lo._size = size_lo;
+		lo._size = n;
+		lo._reallocate(n);
+		g_copy(lo._d, _d, n);
 		lo._is_positive = true;
+		lo._norm();
 
-		const size_t size_hi = _size - n;
-		for (size_t i = n; i < _size; ++i) _d[i - n] = _d[i];
-		_size = size_hi;
-		_reallocate(size_hi);
-
-		if (fix_roundoff) *this += 1u;
+		g_copy(_d, &_d[n], _size - n);
+		_size -= n;
+		_reallocate(_size);
 	}
 
 	gfloat to_float() const
@@ -505,7 +431,7 @@ public:
 		// base 2
 		long double mantissa; size_t exponent;
 		if (_size == 1) { mantissa = _d[0]; exponent = 0; }
-		else { mantissa = std::ldexpl(_d[_size - 1], 64) + _d[_size - 2]; exponent = (_size - 2) * sizeof(mp_limb_t) * 8; };
+		else { mantissa = std::ldexpl(_d[_size - 1], 64) + _d[_size - 2]; exponent = (_size - 2) * sizeof(uint64_t) * 8; };
 		while (mantissa >= 1) { mantissa *= 0.5; ++exponent; }
 
 		return gfloat(_is_positive ? mantissa : -mantissa, exponent);
@@ -514,9 +440,7 @@ public:
 	std::string to_string() const
 	{
 		char * const cstr = new char[_size * 20 + 16];
-		const size_t str_size = g_get_str((unsigned char *)cstr, _d, _size);
-		for (size_t i = 0; i < str_size; ++i) cstr[i] += '0';
-  		cstr[str_size] = '\0';
+		g_get_str(cstr, _d, _size);
 		const std::string str_pos = std::string(cstr);
 		delete[] cstr;
 		return _is_positive ? str_pos : (std::string("-") + str_pos);
