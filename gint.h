@@ -81,13 +81,14 @@ class gint
 private:
 	size_t _alloc;
 	size_t _size;
-	bool _is_positive;
 	uint64_t * _d;
+	bool _is_positive;
 
 private:
-	void _allocate()
+	void _allocate(const size_t size)
 	{
-		_alloc = (_size / 1024 + 1) * 1024;
+		_alloc = (size / 1024 + 1) * 1024;
+		_size = size;
 		_d = (uint64_t *)Heap::allocate_function(_alloc * sizeof(uint64_t));
 	}
 
@@ -99,6 +100,7 @@ private:
 			_d = (uint64_t *)Heap::reallocate_function(_d, _alloc * sizeof(uint64_t), alloc * sizeof(uint64_t));
 			_alloc = alloc;
 		}
+		_size = size;
 	}
 
 	void _free()
@@ -137,15 +139,11 @@ private:
 
 	void _uadd(const uint64_t n)
 	{
-		const size_t size = _size;
-		uint64_t * const d = _d;
-
-		const uint64_t carry = g_add_1(d, d, size, n);
+		const uint64_t carry = g_add_1(_d, _size, n);
 		if (carry != 0)
 		{
-			++_size;
-			_reallocate(size + 1);
-			_d[size] = carry;
+			_reallocate(_size + 1);
+			_d[_size - 1] = carry;
 		}
 	}
 
@@ -161,22 +159,18 @@ private:
 		}
 		else
 		{
-			g_sub_1(d, d, size, n);
+			g_sub_1(d, size, n);
 			if (d[size - 1] == 0) --_size;
 		}
 	}
 
 	void _umul(const uint64_t n)
 	{
-		const size_t size = _size;
-		uint64_t * const d = _d;
-
-		const uint64_t carry = g_mul_1(d, d, size, n);
+		const uint64_t carry = g_mul_1(_d, _size, n);
 		if (carry != 0)
 		{
-			++_size;
-			_reallocate(size + 1);
-			_d[size] = carry;
+			_reallocate(_size + 1);
+			_d[_size - 1] = carry;
 		}
 	}
 
@@ -184,17 +178,10 @@ private:
 	{
 		const size_t size = _size, rsize = rhs._size;
 
-		const size_t new_size = std::max(size, rsize);
-		_reallocate(new_size + 1);
-
+		_reallocate(std::max(size, rsize) + 1);
 		uint64_t * const d = _d;
 		const uint64_t carry = (size >= rsize) ? g_add(d, d, size, rhs._d, rsize) : g_add(d, rhs._d, rsize, d, size);
-		_size = new_size;
-		if (carry != 0)
-		{
-			d[size] = carry;
-			++_size;
-		}
+		if (carry != 0) d[_size - 1] = carry; else --_size;
 	}
 
 	void _usubu(const gint & rhs)	// this and rhs are positive
@@ -210,7 +197,6 @@ private:
 		{
 			_reallocate(rsize);
 			g_sub(_d, rhs._d, rsize, _d, size);
-			_size = rsize;
 			_norm();
 			_is_positive = false;
 		}
@@ -233,6 +219,15 @@ private:
 		}
 	}
 
+	void _umulu(const gint & x, const gint & y)	// *this != x, *this != y
+	{
+		const size_t xsize = x._size, ysize = y._size;
+
+		_reallocate(xsize + ysize);
+		const uint64_t carry = (xsize >= ysize) ? g_mul(_d, x._d, xsize, y._d, ysize) : g_mul(_d, y._d, ysize, x._d, xsize);
+		if (carry == 0) --_size;
+	}
+
 	void _uadd(const gint & rhs)
 	{
 		if (rhs._size == 0) return;
@@ -248,24 +243,20 @@ private:
 public:
 	gint()
 	{
-		_size = 0;
-		_allocate();
+		_allocate(0);
 		_is_positive = true;
 	}
 
 	gint(const gint & rhs)
 	{
-		_size = rhs._size;
-		_allocate();
+		_allocate(rhs._size);
 		_is_positive = rhs._is_positive;
-
 		g_copy(_d, rhs._d, _size);
 	}
 
 	gint(const uint64_t n)
 	{
-		_size = (n == 0) ? 0 : 1;
-		_allocate();
+		_allocate((n == 0) ? 0 : 1);
 		_is_positive = true;
 		_d[0] = n;
 	}
@@ -274,8 +265,7 @@ public:
 
 	void reset()
 	{
-		_reallocate(1, true);
-		_size = 0;
+		_reallocate(0, true);
 		_is_positive = true;
 	}
 
@@ -284,8 +274,7 @@ public:
 
 	gint & operator = (const uint64_t n)
 	{
-		_reallocate(1);
-		_size = (n == 0) ? 0 : 1;
+		_reallocate((n == 0) ? 0 : 1);
 		_is_positive = true;
 		_d[0] = n;
 		return *this;
@@ -295,13 +284,9 @@ public:
 	{
 		if (&rhs == this) return *this;
 
-		const size_t size = rhs._size;
-		_reallocate(std::max(size, size_t(1)));
-		_size = size;
+		_reallocate(rhs._size);
 		_is_positive = rhs._is_positive;
-
-		g_copy(_d, rhs._d, size);
-
+		g_copy(_d, rhs._d, rhs._size);
 		return *this;
 	}
 
@@ -309,8 +294,8 @@ public:
 	{
 		std::swap(_alloc, rhs._alloc);
 		std::swap(_size, rhs._size);
-		std::swap(_is_positive, rhs._is_positive);
 		std::swap(_d, rhs._d);
+		std::swap(_is_positive, rhs._is_positive);
 		return *this;
 	}
 
@@ -341,11 +326,13 @@ public:
 		return *this;
 	}
 
-	uint64_t operator%(const uint64_t n) const
+	static void mod_init(const uint64_t n, uint64_t & n_inv, int & n_e) { g_mod_init(n, n_inv, n_e); }
+
+	uint64_t mod(const uint64_t n, const uint64_t n_inv, const int n_e, const uint64_t n_f) const
 	{
 		if (n == 0) throw std::runtime_error("divide by zero");
 		if (_size == 0) return 0;
-		const uint64_t remainder = g_mod_1(_d, _size, n);
+		const uint64_t remainder = g_mod_1(_d, _size, n, n_inv, n_e, n_f);
 		if (remainder == 0) return 0;
 		return _is_positive ? remainder : n - remainder;
 	}
@@ -369,11 +356,7 @@ public:
 	gint & mul(const gint & x, const gint & y)	// *this != x, *this != y
 	{
 		if ((x._size == 0) || (y._size == 0)) { *this = 0u; return *this; }
-
-		const size_t new_size = x._size + y._size;
-		_reallocate(new_size);
-		const uint64_t carry = (x._size >= y._size) ? g_mul(_d, x._d, x._size, y._d, y._size) : g_mul(_d, y._d, y._size, x._d, x._size);
-		_size = (carry == 0) ? new_size - 1 : new_size;
+		_umulu(x, y);
 		_is_positive = (x._is_positive == y._is_positive);
 		return *this;
 	}
@@ -386,15 +369,16 @@ public:
 
 	gint & divrem(const gint & x, const gint & y, gint & r)
 	{
+		const size_t xsize = x._size, ysize = y._size;
+
 		if (!x._is_positive || !y._is_positive) throw std::runtime_error("divide: negative input");
-		if (y._size == 0) throw std::runtime_error("divide by zero");
-		if (x._size == 0) { r = 0u; *this = 0u; return *this; }
+		if (ysize == 0) throw std::runtime_error("divide by zero");
+		if (xsize == 0) { r = 0u; *this = 0u; return *this; }
 
-		if (y._size > x._size) { r = x; *this = 0u; return *this; }
+		if (ysize > xsize) { r = x; *this = 0u; return *this; }
 
-		_size = x._size - y._size + 1; r._size = y._size;
-		_reallocate(_size); r._reallocate(r._size);
-		g_tdiv_qr(_d, r._d, x._d, x._size, y._d, y._size);
+		_reallocate(xsize - ysize + 1); r._reallocate(ysize);
+		g_tdiv_qr(_d, r._d, x._d, xsize, y._d, ysize);
 		_norm(); r._norm();
 		return *this;
 	}
@@ -402,8 +386,7 @@ public:
 	gint & lshift(const size_t n)
 	{
 		if (_size == 0) return *this;
-		_size += n;
-		_reallocate(_size);
+		_reallocate(_size + n);
 		g_copy_rev(&_d[n], _d, _size - n);
 		g_zero(_d, n);
 		return *this;
@@ -413,15 +396,13 @@ public:
 	{
 		if (!_is_positive || (n >= _size)) throw std::runtime_error("split failed");
 
-		lo._size = n;
 		lo._reallocate(n);
 		g_copy(lo._d, _d, n);
-		lo._is_positive = true;
 		lo._norm();
+		lo._is_positive = true;
 
 		g_copy(_d, &_d[n], _size - n);
-		_size -= n;
-		_reallocate(_size);
+		_reallocate(_size - n);
 	}
 
 	gfloat to_float() const

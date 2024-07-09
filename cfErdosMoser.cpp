@@ -39,6 +39,10 @@ private:
 	// { p : 3 is a primitive root modulo p } such that 6 * (5*7*17*19*29*31*43)^2 < 2^64
 	const std::vector<uint32_t> _P_pr3 = { 5, 7, 17, 19, 29, 31, 43 };
 	static const uint64_t _mod_q = 6 * uint64_t(5*7*17*19*29*31*43) * (5*7*17*19*29*31*43);
+	// uint64_t mod_q_inv; int mod_q_e; gint::mod_init(_mod_q, mod_q_inv, mod_q_e);
+	static const uint64_t _mod_q_inv = 2319961602461247110ull;
+	static const int _mod_q_e = 60;
+	static const uint64_t _mod_q_f = (-_mod_q) % _mod_q;	// 2^64 mod mod_q
 
 public:
 	CF(Heap & heap) : _heap(heap) {}
@@ -172,8 +176,8 @@ private:
 		_q_j = f22 * _q_j - f21 * _q_jm1; _q_jm1 = tf;
 
 		// Update the denominators of the regular continued fraction q_{j-1} and q_j
-		const uint64_t i11 = Mcf.get11() % _mod_q, i12 = Mcf.get12() % _mod_q;
-		const uint64_t i21 = Mcf.get21() % _mod_q, i22 = Mcf.get22() % _mod_q;
+		const uint64_t i11 = Mcf.get11().mod(_mod_q, _mod_q_inv, _mod_q_e, _mod_q_f), i12 = Mcf.get12().mod(_mod_q, _mod_q_inv, _mod_q_e, _mod_q_f);
+		const uint64_t i21 = Mcf.get21().mod(_mod_q, _mod_q_inv, _mod_q_e, _mod_q_f), i22 = Mcf.get22().mod(_mod_q, _mod_q_inv, _mod_q_e, _mod_q_f);
 		Mod64 mod64(_mod_q);
 		const uint64_t ti = mod64.sub(mod64.mul(i11, _q_jm1_mod), mod64.mul(i12, _q_j_mod));
 		_q_j_mod = mod64.sub(mod64.mul(i22, _q_j_mod), mod64.mul(i21, _q_jm1_mod)); _q_jm1_mod = ti;
@@ -183,8 +187,8 @@ private:
 
 	bool condition_c() const
 	{
-		const uint64_t q_j = _q_jm1_mod;	// a step backward
-		const uint64_t g6 = q_j % 6u;
+		const uint64_t q_j_mod = _q_jm1_mod;	// a step backward
+		const uint64_t g6 = q_j_mod % 6u;
 		return ((g6 == 1) || (g6 == 5));	// (c) gcd(q_{j , 6) = 1
 	}
 
@@ -193,8 +197,8 @@ private:
 		// a step backward
 		const uint64_t j = _j - 1;
 		const gint & a_jp1 = _a_j;
-		const uint64_t q_j_mod = _q_jm1_mod;
 		const gfloat & q_j = _q_jm1;
+		const uint64_t q_j_mod = _q_jm1_mod;
 
 		const uint64_t g6 = q_j_mod % 6u;
 
