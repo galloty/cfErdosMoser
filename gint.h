@@ -228,6 +228,44 @@ private:
 		if (carry == 0) --_size;
 	}
 
+	// Barrett reduction: y_size <= x_size <= 2 * y_size, *this != x, *this != y
+	void _udivu(const gint & x, const gint & y, const gint & y_inv, gint & remainder)
+	{
+		const size_t xsize = x._size, ysize = y._size;
+
+		gint t;	// t = x >> (ysize - 1)
+		if (xsize <= ysize - 1)
+		{
+			*this = 0u;
+			remainder = x;
+		}
+		else
+		{
+			t._reallocate(xsize - (ysize - 1));
+			g_copy(t._d, &x._d[ysize - 1], xsize - (ysize - 1));
+
+			// *this = (t * y_inv) >> (ysize + 1)
+			_umulu(t, y_inv);
+			if (_size <= ysize + 1)
+			{
+				*this = 0u;
+				remainder = x;
+			}
+			else
+			{
+				g_copy(_d, &_d[ysize + 1], _size - (ysize + 1));
+				_reallocate(_size - (ysize + 1));
+
+				// r = x - *this * y
+				t._umulu(*this, y);
+				remainder = x; remainder._usubu(t);
+			}
+
+			size_t h = 0;
+			while (remainder._cmp(y) >= 0) { remainder._usubu(y); _uadd(1u); ++h; if (h > 1) { std::cout << "Warning: _udivu" << std::endl; }}
+		}
+	}
+
 	void _uadd(const gint & rhs)
 	{
 		if (rhs._size == 0) return;
@@ -299,7 +337,6 @@ public:
 		return *this;
 	}
 
-	bool is_zero() const { return (_size == 0); }
 	bool operator==(const gint & rhs) const { return (_cmp(rhs) == 0); }
 	bool operator!=(const gint & rhs) const { return (_cmp(rhs) != 0); }
 	bool operator>=(const gint & rhs) const { return (_cmp(rhs) >= 0); }
@@ -367,6 +404,144 @@ public:
 		return *this;
 	}
 
+	gint & lshift(const size_t n)
+	{
+		if (_size == 0) return *this;
+		_reallocate(_size + n);
+		g_copy_rev(&_d[n], _d, _size - n);
+		g_zero(_d, n);
+		return *this;
+	}
+
+	gint & rshift(const size_t n)
+	{
+		if (_size <= n) { *this = 0u; return *this; }
+		g_copy(_d, &_d[n], _size - n);
+		_reallocate(_size - n);
+		return *this;
+	}
+
+	gint & operator<<=(const size_t s)
+	{
+		if (_size == 0) return *this;
+		const size_t s_size = s / 64, s_64 = s % 64, size = _size;
+		if (s_64 == 0) return lshift(s_size);
+
+		const uint64_t h = _d[size - 1] >> (64 - s_64);
+		_reallocate(size + s_size + ((h != 0) ? 1 : 0));
+		uint64_t * const d = _d;
+		if (h != 0) d[size + s_size] = h;
+		for (size_t j = size - 1; j > 0; --j) d[j + s_size] = (d[j] << s_64) | (d[j - 1] >> (64 - s_64));
+		d[s_size] = d[0] << s_64;
+		g_zero(_d, s_size);
+		return *this;
+	}
+
+	gint & operator>>=(const size_t s)
+	{
+		const size_t s_size = s / 64, s_64 = s % 64, size = _size;
+		if (_size <= s_size) { *this = 0u; return *this; }
+		if (s_64 == 0) return rshift(s_size);
+
+		uint64_t * const d = _d;
+		for (size_t i = 0; i < size - s_size - 1; ++i) d[i] = (d[i + s_size] >> s_64) | (d[i + s_size + 1] << (64 - s_64));
+		const uint64_t l = d[size - 1] >> s_64;
+		d[size - s_size - 1] = l;
+		_reallocate(size - s_size - ((l == 0) ? 1 : 0));
+		return *this;
+	}
+
+	gint & div_norm(int & right_shift)
+	{
+		if (_size == 0) throw std::runtime_error("divide by zero");
+
+		int rshift = 0;
+		for (size_t i = 0; _d[i] == 0; ++i) rshift += 8 * sizeof(uint64_t);
+		uint64_t hi = _d[_size - 1]; while (hi >> 63 != 1) { hi *= 2; --rshift; }
+		right_shift = rshift;
+
+		if (rshift > 0) *this >>= rshift; else if (rshift < 0) *this <<= -rshift;
+		return *this;
+	}
+
+	// 2^{2*d_bit_size} / d: d_inv > d
+	gint & div_invert(const gint & d)	// *this != d
+	{
+		const size_t dsize = d._size;
+		if (dsize == 0) throw std::runtime_error("divide by zero");
+
+// std::cout << d.to_string() << " (" << dsize << ")" << std::endl;
+
+		gint x;
+		x._reallocate(dsize + 1);
+		g_zero(x._d, dsize - 1);
+		x._d[dsize] = 1; x._d[dsize - 1] = (~size_t(0) / (d._d[dsize - 1] >> 32)) << 32;
+		x._is_positive = true;
+
+// std::cout << x.to_string() << " (" << x._size << ")" << std::endl;
+
+		*this = 0u;
+		size_t h = 0;
+		while (*this != x)
+		{
+			*this = x;
+			gint t; t.mul(x, x); t.rshift(dsize - 1); t *= d; t.rshift(dsize + 1);
+			x += x; x -= t;
+			h++;
+			// if (h == 100) break;
+		}
+		*this -= 1u;
+
+// std::cout << to_string() << " (" << _size << "): " << h << std::endl;
+// exit(0);
+
+		return *this;
+	}
+
+	gint & divexact(const gint & d, const gint & d_inv, const int right_shift)
+	{
+		const size_t dsize = d._size;
+
+		if (!_is_positive || !d._is_positive) throw std::runtime_error("divide: negative input");
+		if (dsize == 0) throw std::runtime_error("divide by zero");
+
+		if (right_shift > 0) *this >>= right_shift; else if (right_shift < 0) *this <<= -right_shift;
+
+		const size_t size = _size;
+		if (size == 0) { *this = 0u; return *this; }
+
+		if (size < dsize) throw std::runtime_error("divexact failed");
+
+		const size_t n = size / dsize + 1;	// >= 2
+		gint r = 0u, y = 0u, x, t;
+		for (size_t i = 0, j = n - 1; i < n; ++i, --j)
+		{
+			if (r._size != 0)
+			{
+				x = r; x.lshift(dsize);
+				g_copy(x._d, &_d[j * dsize], dsize);
+			}
+			else
+			{
+				// TODO: first loop, external.
+				x._reallocate(dsize);
+				for (size_t k = 0; k < dsize; ++k) x._d[k] = (j * dsize + k < size) ? _d[j * dsize + k] : 0;
+				x._norm();
+				x._is_positive = true;
+			}
+
+			// TODO: single variable x in, r out
+			t._udivu(x, d, d_inv, r);
+
+			// TODO: set block
+			y.lshift(dsize); y += t;
+		}
+		*this = y;
+
+		if (r._size != 0) throw std::runtime_error("divexact failed");
+		return *this;
+	}
+
 	gint & divrem(const gint & x, const gint & y, gint & r)
 	{
 		const size_t xsize = x._size, ysize = y._size;
@@ -380,15 +555,6 @@ public:
 		_reallocate(xsize - ysize + 1); r._reallocate(ysize);
 		g_tdiv_qr(_d, r._d, x._d, xsize, y._d, ysize);
 		_norm(); r._norm();
-		return *this;
-	}
-
-	gint & lshift(const size_t n)
-	{
-		if (_size == 0) return *this;
-		_reallocate(_size + n);
-		g_copy_rev(&_d[n], _d, _size - n);
-		g_zero(_d, n);
 		return *this;
 	}
 

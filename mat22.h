@@ -59,21 +59,6 @@ public:
 	{
 		gint t1, t2;
 
-		t1.mul(_a11, rhs._a12); t2.mul(_a12, rhs._a22); t1 += t2;
-		_a11 *= rhs._a11; _a12 *= rhs._a21; _a11 += _a12;
-		_a12.swap(t1);
-
-		t1.mul(_a21, rhs._a12); t2.mul(_a22, rhs._a22); t1 += t2;
-		_a21 *= rhs._a11; _a22 *= rhs._a21; _a21 += _a22;
-		_a22.swap(t1);
-
-		return *this;
-	}
-
-	Mat22 & mul_right_div(const Mat22 & rhs, const gint & d)
-	{
-		gint t1, t2;
-
 		t1.mul(_a11, rhs._a12); t2.mul(_a12, rhs._a22); t1 += t2; t2.reset();
 		_a11 *= rhs._a11; _a12 *= rhs._a21; _a11 += _a12;
 		_a12.swap(t1);
@@ -82,10 +67,15 @@ public:
 		_a21 *= rhs._a11; _a22 *= rhs._a21; _a21 += _a22;
 		_a22.swap(t1);
 
-		t1.divrem(_a11, d, t2); t1.swap(_a11); if (!t2.is_zero()) throw std::runtime_error("divexact failed");
-		t1.divrem(_a12, d, t2); t1.swap(_a12); if (!t2.is_zero()) throw std::runtime_error("divexact failed");
-		t1.divrem(_a21, d, t2); t1.swap(_a21); if (!t2.is_zero()) throw std::runtime_error("divexact failed");
-		t1.divrem(_a22, d, t2); t1.swap(_a22); if (!t2.is_zero()) throw std::runtime_error("divexact failed");
+		return *this;
+	}
+
+	Mat22 & div(gint & d)
+	{
+		int right_shift; d.div_norm(right_shift);
+		gint d_inv; d_inv.div_invert(d);
+		_a11.divexact(d, d_inv, right_shift); _a12.divexact(d, d_inv, right_shift);
+		_a21.divexact(d, d_inv, right_shift); _a22.divexact(d, d_inv, right_shift);
 		return *this;
 	}
 

@@ -97,10 +97,17 @@ private:
 		return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
 	}
 
-	static double gcf_mul_div(Mat22 & M, const Mat22 & Mgcf, const gint & divisor)
+	static double gcf_mul(Mat22 & M, const Mat22 & Mgcf)
 	{
 		const auto start = std::chrono::high_resolution_clock::now();
-		M.mul_right_div(Mgcf, divisor);
+		M.mul_right(Mgcf);
+		return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
+	}
+
+	static double gcf_div(Mat22 & M, gint & divisor)
+	{
+		const auto start = std::chrono::high_resolution_clock::now();
+		M.div(divisor);
 		return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
 	}
 
@@ -232,7 +239,7 @@ public:
 		_j = uint64_t(-1);
 
 		// n is the index of the convergent of the generalized continued fraction.
-		uint64_t n = 1, nstep = 64;
+		uint64_t n = 1, nstep = 256;
 
 		// Matrix M is the remainder of the nth convergent the generalized continued fraction of log(2) / 2N
 		// after j coefficients of the regular continued fraction retrieval using the Euclidean algorithm.
@@ -247,7 +254,7 @@ public:
 		_q_j = gfloat(0, 0); _q_jm1 = gfloat(1, 0);
 
 		const std::string Nstr = N.to_string();
-		double time_gcf_matrix_divisor = 0, time_gcf_mul_div = 0, time_cf_reduce = 0, time_elapsed = 0, prev_time_elapsed = 0;
+		double time_gcf_matrix_divisor = 0, time_gcf_mul = 0, time_gcf_div = 0, time_cf_reduce = 0, time_elapsed = 0, prev_time_elapsed = 0;
 		size_t M_min_size = 0, Mgcf_size = 0;	// divisor_size = 0, M_max_size = 0;
 		uint64_t j_prev = _j;
 
@@ -262,7 +269,8 @@ public:
 				Mgcf_size = Mgcf.get_byte_count();
 				// divisor_size = divisor.get_byte_count();
 
-				time_gcf_mul_div += gcf_mul_div(M, Mgcf, divisor);
+				time_gcf_mul += gcf_mul(M, Mgcf);
+				time_gcf_div += gcf_div(M, divisor);
 			}
 			n += nstep;
 
@@ -274,7 +282,7 @@ public:
 
 			if (Mgcf_size < M_min_size / 4) nstep *= 2;
 
-			time_elapsed = time_gcf_matrix_divisor + time_gcf_mul_div + time_cf_reduce;
+			time_elapsed = time_gcf_matrix_divisor + time_gcf_mul + time_gcf_div + time_cf_reduce;
 
 			if (found) found = condition_c();
 
@@ -289,7 +297,7 @@ public:
 					<< _heap.get_max_block_size() / (1u << 20) << " + " << _heap.get_max_block_size_gmp() / (1u << 20) << " MB), "
 					<< "elapsed time: " << format_time(time_elapsed) << " ("	// "." << std::endl;
 					<< time_gcf_matrix_divisor * 100 / time_elapsed << "% + "
-					<< time_gcf_mul_div * 100 / time_elapsed << "% + "
+					<< time_gcf_mul * 100 / time_elapsed << "% + " << time_gcf_div * 100 / time_elapsed << "% + "
 					<< time_cf_reduce * 100 / time_elapsed << "%)." << std::endl;
 				pio::print(ss.str());
 				j_prev = _j;
