@@ -90,7 +90,7 @@ inline int g_cmp(const uint64_t * const x, const uint64_t * const y, const size_
 	for (size_t i = 0, j = size - 1; i < size; ++i, --j)
 	{
 		const uint64_t x_j = x[j], y_j = y[j];
-		if (x_j > y_j) return 1; else if (x_j < y_j) return -1;
+		if (x_j != y_j) return (x_j > y_j) ? 1 : -1;
 	}
 	return 0;
 #endif
@@ -178,6 +178,7 @@ inline uint64_t g_add(uint64_t * const z, const uint64_t * const x, const size_t
 #endif
 }
 
+// x_size >= y_size > 0
 inline void g_sub(uint64_t * const z, const uint64_t * const x, const size_t x_size, const uint64_t * const y, const size_t y_size)
 {
 #ifdef GMP_MPN

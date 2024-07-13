@@ -306,8 +306,7 @@ public:
 			if (found) found = condition_d();
 		}
 
-		_N.reset(); _cond_b.reset(); _a_j.reset();
-		M.reset();
+		_N = 0u; _cond_b = 0u; _a_j = 0u; M.set_zero();
 		std::cout << "Memory size: " << _heap.get_size() << " + " << _heap.get_size_gmp() << " B." << std::endl;
 	}
 };

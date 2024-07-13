@@ -23,7 +23,7 @@ public:
 	virtual ~Mat22() {}
 	Mat22(const Mat22 & rhs) : _a11(rhs._a11), _a12(rhs._a12), _a21(rhs._a21), _a22(rhs._a22) {}
 
-	Mat22 & operator = (const Mat22 & rhs)
+	Mat22 & operator=(const Mat22 & rhs)
 	{
 		if (&rhs == this) return *this;
 		_a11 = rhs._a11; _a12 = rhs._a12; _a21 = rhs._a21; _a22 = rhs._a22;
@@ -35,8 +35,7 @@ public:
 	const gint & get21() const { return _a21; }
 	const gint & get22() const { return _a22; }
 
-	void reset() { _a11.reset(); _a12.reset(); _a21.reset(); _a22.reset(); }
-
+	void set_zero() { _a11 = 0u; _a12 = 0u; _a21 = 0u; _a22 = 0u; }
 	void set_identity() { _a11 = 1u; _a12 = 0u; _a21 = 0u; _a22 = 1u; }
 
 	void set_gcf(const uint64_t n)
@@ -59,11 +58,11 @@ public:
 	{
 		gint t1, t2;
 
-		t1.mul(_a11, rhs._a12); t2.mul(_a12, rhs._a22); t1 += t2; t2.reset();
+		t1.mul(_a11, rhs._a12); t2.mul(_a12, rhs._a22); t1 += t2; t2 = 0u;
 		_a11 *= rhs._a11; _a12 *= rhs._a21; _a11 += _a12;
 		_a12.swap(t1);
 
-		t1.mul(_a21, rhs._a12); t2.mul(_a22, rhs._a22); t1 += t2; t2.reset();
+		t1.mul(_a21, rhs._a12); t2.mul(_a22, rhs._a22); t1 += t2; t2 = 0u;
 		_a21 *= rhs._a11; _a22 *= rhs._a21; _a21 += _a22;
 		_a22.swap(t1);
 

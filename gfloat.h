@@ -43,15 +43,13 @@ public:
 
 	virtual ~gfloat() {}
 
-	// double get_mantissa() const { return _mantissa; }
-	// size_t get_exponent() const { return _exponent; }
-
-	gfloat & operator = (const gfloat & rhs)
+	gfloat & operator=(const gfloat & rhs)
 	{
-		if (&rhs == this) return *this;
-		_mantissa = rhs._mantissa; _exponent = rhs._exponent;
+		if (&rhs != this) { _mantissa = rhs._mantissa; _exponent = rhs._exponent; }
 		return *this;
 	}
+
+	gfloat operator-() const { return gfloat(-_mantissa, _exponent); }
 
 	gfloat & operator+=(const gfloat & rhs)
 	{
