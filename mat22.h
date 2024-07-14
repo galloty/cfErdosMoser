@@ -73,8 +73,8 @@ public:
 	{
 		int right_shift; d.div_norm(right_shift);
 		gint d_inv; d_inv.div_invert(d);
-		_a11.divexact(d, d_inv, right_shift); _a12.divexact(d, d_inv, right_shift);
-		_a21.divexact(d, d_inv, right_shift); _a22.divexact(d, d_inv, right_shift);
+		_a11.div_exact(d, d_inv, right_shift); _a12.div_exact(d, d_inv, right_shift);
+		_a21.div_exact(d, d_inv, right_shift); _a22.div_exact(d, d_inv, right_shift);
 		return *this;
 	}
 
@@ -134,13 +134,13 @@ public:
 
 	bool get_cf_coefficient(gint & coefficient1, gint & coefficient2)
 	{
-		gint t, r;
+		gint t;
 
-		coefficient1.divrem(_a11, _a21, r); t.divrem(_a12, _a22, r);
+		coefficient1.quotient(_a11, _a21); t.quotient(_a12, _a22);
 		if (coefficient1 != t) return false;
 		cf_mul(coefficient1);
 
-		coefficient2.divrem(_a11, _a21, r); t.divrem(_a12, _a22, r);
+		coefficient2.quotient(_a11, _a21); t.quotient(_a12, _a22);
 		const bool success = (coefficient2 == t);
 		if (success) cf_mul(coefficient2); else cf_mul_revert(coefficient1);
 		return success;

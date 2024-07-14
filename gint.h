@@ -58,8 +58,8 @@ public:
  	bool operator!=(const gint & rhs) const { return (_cmp(rhs) != 0); }
  	bool operator>=(const gint & rhs) const { return (_cmp(rhs) >= 0); }
 
-	gint & operator+=(const uint64_t n) { if (_is_positive) _u += n; else _is_positive = !_u.usub(n); return *this; }
-	gint & operator-=(const uint64_t n) { if (_is_positive) _is_positive = _u.usub(n); else _u += n; return *this; }
+	gint & operator+=(const uint64_t n) { if (_is_positive) _u += n; else _is_positive = !_u.sub(n); return *this; }
+	gint & operator-=(const uint64_t n) { if (_is_positive) _is_positive = _u.sub(n); else _u += n; return *this; }
 	gint & operator*=(const uint64_t n) { _u *= n; return *this; }
 
  	static void mod_init(const uint64_t n, uint64_t & n_inv, int & n_e) { guint::mod_init(n, n_inv, n_e); }
@@ -74,14 +74,14 @@ public:
 	gint & operator+=(const gint & rhs)
 	{
 		if (_is_positive == rhs._is_positive) _u += rhs._u;
-		else _is_positive = _is_positive ? _u.usub(rhs._u) : !_u.usub(rhs._u);
+		else _is_positive = _is_positive ? _u.sub(rhs._u) : !_u.sub(rhs._u);
 		return *this;
 	}
 
 	gint & operator-=(const gint & rhs)
 	{
 		if (_is_positive != rhs._is_positive) _u += rhs._u;
-		else _is_positive = _is_positive ? _u.usub(rhs._u) : !_u.usub(rhs._u);
+		else _is_positive = _is_positive ? _u.sub(rhs._u) : !_u.sub(rhs._u);
 		return *this;
 	}
 
@@ -107,16 +107,16 @@ public:
 		return *this;
 	}
 
-	gint & divexact(const gint & d, const gint & d_inv, const int right_shift)
+	gint & div_exact(const gint & d, const gint & d_inv, const int right_shift)
 	{
-		_u.divexact(d._u, d_inv._u, right_shift);
+		_u.div_exact(d._u, d_inv._u, right_shift);
 		return *this;
 	}
 
-	gint & divrem(const gint & x, const gint & y, gint & r)	// *this != x, *this != y, r != x, r != y
+	gint & quotient(const gint & x, const gint & y)	// *this != x, *this != y
 	{
 		if (!x._is_positive || !y._is_positive) throw std::runtime_error("divide: negative input");
-		_u.divrem(x._u, y._u, r._u);
+		_u.quotient(x._u, y._u);
 		return *this;
 	}
 

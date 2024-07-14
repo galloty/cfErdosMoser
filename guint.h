@@ -114,28 +114,30 @@ private:
 		_size = size;
 	}
 
-	// Barrett reduction: y_size <= x_size <= 2 * y_size, *this != x, *this != y
-	void _div(const guint & x, const guint & y, const guint & y_inv, guint & remainder)
+	// Barrett reduction: y_size <= x_size <= 2 * y_size
+	// x: dividend, y: divisor, *this: quotient, r: remainder
+	// Sources and destinations must be different
+	void _div(guint & r, const guint & x, const guint & y, const guint & y_inv)
 	{
 		const size_t xsize = x._size, ysize = y._size;
 
-		guint t;	// t = x >> (ysize - 1)
+		// r = x >> (ysize - 1)
 		if (xsize <= ysize - 1)
 		{
 			*this = 0u;
-			remainder = x;
+			r = x;
 		}
 		else
 		{
-			t._reallocate(xsize - (ysize - 1));
-			g_copy(t._d, &x._d[ysize - 1], xsize - (ysize - 1));
+			r._reallocate(xsize - (ysize - 1));
+			g_copy(r._d, &x._d[ysize - 1], xsize - (ysize - 1));
 
-			// *this = (t * y_inv) >> (ysize + 1)
-			mul(t, y_inv);
+			// *this = (r * y_inv) >> (ysize + 1)
+			mul(r, y_inv);
 			if (_size <= ysize + 1)
 			{
 				*this = 0u;
-				remainder = x;
+				r = x;
 			}
 			else
 			{
@@ -143,12 +145,12 @@ private:
 				_reallocate(_size - (ysize + 1));
 
 				// r = x - *this * y
-				t.mul(*this, y);
-				remainder = x; remainder -= t;
-			}
+				r.mul(*this, y);
+				if (r.sub(x)) std::cout << "Warning: _div" << std::endl;	// if x > r then sub returns x - r
 
-			size_t h = 0;
-			while (remainder.cmp(y) >= 0) { remainder -= y; *this += 1u; ++h; if (h > 1) { std::cout << "Warning: _udivu" << std::endl; }}
+				size_t h = 0;
+				while (r.cmp(y) >= 0) { r -= y; *this += 1u; ++h; if (h > 1) std::cout << "Warning: _div" << std::endl; }
+			}
 		}
 	}
 
@@ -192,7 +194,7 @@ public:
 	}
 
 	// return false if negative
-	bool usub(const uint64_t n)
+	bool sub(const uint64_t n)
 	{
 		if (n == 0) return true;
 
@@ -208,7 +210,7 @@ public:
 	}
 
 	// *this >= n is required
-	guint & operator-=(const uint64_t n) { usub(n); return *this; }
+	guint & operator-=(const uint64_t n) { sub(n); return *this; }
 
 	guint & operator*=(const uint64_t n)
 	{
@@ -255,7 +257,7 @@ public:
 	}
 
 	// return false if negative
-	bool usub(const guint & rhs)
+	bool sub(const guint & rhs)
 	{
 		const size_t size = _size, rsize = rhs._size;
 
@@ -295,15 +297,29 @@ public:
 	}
 
 	// *this >= rhs is required
-	guint & operator-=(const guint & rhs) { usub(rhs); return *this; }
+	guint & operator-=(const guint & rhs) { sub(rhs); return *this; }
 
 	guint & mul(const guint & x, const guint & y)	// *this != x, *this != y
 	{
 		const size_t xsize = x._size, ysize = y._size;
 		if ((xsize == 0) || (ysize == 0)) { *this = 0u; return *this; }
-		_reallocate(xsize + ysize);
-		const uint64_t carry = (xsize >= ysize) ? g_mul(_d, x._d, xsize, y._d, ysize) : g_mul(_d, y._d, ysize, x._d, xsize);
-		if (carry == 0) --_size;
+		const size_t new_size = xsize + ysize;
+		_reallocate(new_size);
+		uint64_t * const d = _d;
+		g_mul(d, x._d, xsize, y._d, ysize);
+		if (d[new_size - 1] == 0) --_size;
+		return *this;
+	}
+
+	guint & sqr(const guint & x)	// *this != x
+	{
+		const size_t size = x._size;
+		if (size == 0) { *this = 0u; return *this; }
+		const size_t new_size = size + size;
+		_reallocate(new_size);
+		uint64_t * const d = _d;
+		g_sqr(d, x._d, size);
+		if (d[new_size - 1] == 0) --_size;
 		return *this;
 	}
 
@@ -399,7 +415,7 @@ public:
 		while (cmp(x) != 0)
 		{
 			*this = x;
-			guint t; t.mul(x, x); t.rshift(dsize - 1); t *= d; t.rshift(dsize + 1);
+			guint t; t.sqr(x); t.rshift(dsize - 1); t *= d; t.rshift(dsize + 1);
 			x += x; x -= t;
 			h++;
 			// if (h == 100) break;
@@ -411,59 +427,96 @@ public:
 
 		return *this;
 	}
-
-	guint & divexact(const guint & d, const guint & d_inv, const int right_shift)
+	// *this: dividend, d: divisor, q: quotient, r: remainder
+	// Sources and destinations must be different
+	void div_rem(guint & q, guint & r, const guint & d, const guint & d_inv) const
 	{
-		const size_t dsize = d._size;
+		const size_t size = _size, dsize = d._size;
 
-		if (right_shift > 0) *this >>= right_shift; else if (right_shift < 0) *this <<= -right_shift;
-
-		const size_t size = _size;
-		if (size == 0) { *this = 0u; return *this; }
-
-		if (size < dsize) throw std::runtime_error("divexact failed");
+		if (size < dsize) { q = 0u; r = *this; return; }
 
 		const size_t n = size / dsize + 1;	// >= 2
-		guint r = 0u, y = 0u, x, t;
+		r = 0u, q = 0u;
+		guint q_j, t;
 		for (size_t i = 0, j = n - 1; i < n; ++i, --j)
 		{
 			if (r._size != 0)
 			{
-				x = r; x.lshift(dsize);
-				g_copy(x._d, &_d[j * dsize], dsize);
+				q_j = r; q_j.lshift(dsize);
+				g_copy(q_j._d, &_d[j * dsize], dsize);
 			}
 			else
 			{
 				// TODO: first loop, external.
-				x._reallocate(dsize);
-				for (size_t k = 0; k < dsize; ++k) x._d[k] = (j * dsize + k < size) ? _d[j * dsize + k] : 0;
-				x._norm();
+				q_j._reallocate(dsize);
+				for (size_t k = 0; k < dsize; ++k) q_j._d[k] = (j * dsize + k < size) ? _d[j * dsize + k] : 0;
+				q_j._norm();
 			}
 
 			// TODO: single variable x in, r out
-			t._div(x, d, d_inv, r);
+			t._div(r, q_j, d, d_inv);
 
 			// TODO: set block
-			y.lshift(dsize); y += t;
+			q.lshift(dsize); q += t;
 		}
-		*this = y;
+	}
 
-		if (r._size != 0) throw std::runtime_error("divexact failed");
+	// *this /= d, remainder must be zero
+	guint & div_exact(const guint & d, const guint & d_inv, const int right_shift)
+	{
+		if (right_shift > 0) *this >>= right_shift; else if (right_shift < 0) *this <<= -right_shift;
+
+		guint q, r; div_rem(q, r, d, d_inv);
+		if (r._size != 0) throw std::runtime_error("div_exact failed");
+ 		*this = q;
 		return *this;
 	}
 
-	guint & divrem(const guint & x, const guint & y, guint & r)	// *this != x, *this != y, r != x, r != y
+	// *this = x / y, fast if x / y is small
+	guint & quotient(const guint & x, const guint & y)	// *this != x, *this != y
 	{
 		const size_t xsize = x._size, ysize = y._size;
 
 		if (ysize == 0) throw std::runtime_error("divide by zero");
-		if (xsize == 0) { r = 0u; *this = 0u; return *this; }
+		if ((xsize == 0) || (ysize > xsize)) { *this = 0u; return *this; }
 
-		if (ysize > xsize) { r = x; *this = 0u; return *this; }
+		if (xsize == 1) { *this = x._d[0] / y._d[0]; return *this; }
 
-		_reallocate(xsize - ysize + 1); r._reallocate(ysize);
-		g_tdiv_qr(_d, r._d, x._d, xsize, y._d, ysize);
-		_norm(); r._norm();
+		if (xsize == ysize)	// Lehmer's gcd: 97.3%
+		{
+			__uint128_t n = (__uint128_t(x._d[xsize - 1]) << 64) | x._d[xsize - 2];
+			__uint128_t d = (__uint128_t(y._d[ysize - 1]) << 64) | y._d[ysize - 2];
+			if ((n == ~__uint128_t(0)) || (d == ~__uint128_t(0))) { n >>= 1; d >>= 1; }
+			const __uint128_t q_1 = (n + 1) / d, q_2 = n / (d + 1);
+			if (q_1 == q_2)
+			{
+				const uint64_t q_h = uint64_t(q_1 >> 64), q_l = uint64_t(q_1);
+				if (q_h != 0) { _reallocate(2); _d[0] = q_l; _d[1] = q_h; }
+				else *this = q_l;
+				return *this;
+			}
+		}
+
+		if (xsize == ysize + 1)	// Lehmer's gcd: 2.7%
+		{
+			__uint128_t n = (__uint128_t(x._d[xsize - 1]) << 64) | x._d[xsize - 2];
+			uint64_t d = y._d[ysize - 1];
+			if (n == ~__uint128_t(0)) { n >>= 1; d >>= 1; }
+			const __uint128_t q_1 = (n + 1) / d, q_2 = n / (__uint128_t(d) + 1);
+			if (q_1 == q_2)
+			{
+				const uint64_t q_h = uint64_t(q_1 >> 64), q_l = uint64_t(q_1);
+				if (q_h != 0) { _reallocate(2); _d[0] = q_l; _d[1] = q_h; }
+				else *this = q_l;
+				return *this;
+			}
+		}
+
+		// Lehmer's gcd: 0%
+		int right_shift; guint d = y, d_inv; d.div_norm(right_shift); d_inv.div_invert(d);
+		*this = x; if (right_shift > 0) *this >>= right_shift; else if (right_shift < 0) *this <<= -right_shift;
+		guint q, r; div_rem(q, r, d, d_inv);
+		*this = q;
 		return *this;
 	}
 

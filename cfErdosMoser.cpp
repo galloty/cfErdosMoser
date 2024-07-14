@@ -210,8 +210,7 @@ private:
 		const uint64_t g6 = q_j_mod % 6u;
 
 		std::ostringstream ss;
-		ss << _N.to_string() << ", " << j << ", " << a_jp1.to_string() << ", "
-		   << q_j.to_string() << ", " << ((g6 == 1) ? "+" : "-") << "1";
+		ss << _N.to_string() << ", " << j << ", " << a_jp1.to_string() << ", " << q_j.to_string() << ", " << ((g6 == 1) ? "+" : "-") << "1";
 
 		bool cond_d = true;
 		for (const uint32_t p : _P_pr3)

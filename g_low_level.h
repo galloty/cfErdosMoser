@@ -153,15 +153,15 @@ inline uint64_t g_mod_1(const uint64_t * const x, const size_t size, const uint6
 #ifdef GMP_MPN
 	return (uint64_t)mpn_mod_1(mp_srcptr(x), mp_size_t(size), mp_limb_t(n));
 #else
-	uint64_t remainder = 0;
+	uint64_t r = 0;
 	for (size_t i = 0, j = size - 1; i < size; ++i, --j)
 	{
-		// Compute remainder * (2^64 mod n) rather than remainder * 2^64 such that t < n^2
-		const __uint128_t t = remainder * __uint128_t(f) + x[j];
-		remainder = _mod_62(t, n, n_inv, e);
+		// Compute r * (2^64 mod n) rather than r * 2^64 such that t < n^2
+		const __uint128_t t = r * __uint128_t(f) + x[j];
+		r = _mod_62(t, n, n_inv, e);
 	}
 
-	return remainder;
+	return r;
 #endif
 }
 
@@ -190,19 +190,46 @@ inline void g_sub(uint64_t * const z, const uint64_t * const x, const size_t x_s
 #endif
 }
 
-inline uint64_t g_mul(uint64_t * const z, const uint64_t * const x, const size_t x_size, const uint64_t * const y, const size_t y_size)
+inline void g_mul(uint64_t * const z, const uint64_t * const x, const size_t x_size, const uint64_t * const y, const size_t y_size)
 {
-	return (uint64_t)mpn_mul(mp_ptr(z), mp_srcptr(x), mp_size_t(x_size), mp_srcptr(y), mp_size_t(y_size));
+	if (x_size >= y_size) mpn_mul(mp_ptr(z), mp_srcptr(x), mp_size_t(x_size), mp_srcptr(y), mp_size_t(y_size));
+	else mpn_mul(mp_ptr(z), mp_srcptr(y), mp_size_t(y_size), mp_srcptr(x), mp_size_t(x_size));
 }
 
-inline void g_tdiv_qr(uint64_t * const q, uint64_t * const r, const uint64_t * const x, const size_t x_size, const uint64_t * const y, const size_t y_size)
+inline void g_sqr(uint64_t * const z, const uint64_t * const x, const size_t size)
 {
-	mpn_tdiv_qr(mp_ptr(q), mp_ptr(r), mp_size_t(0), mp_srcptr(x), mp_size_t(x_size), mp_srcptr(y), mp_size_t(y_size));
+	mpn_sqr(mp_ptr(z), mp_srcptr(x), mp_size_t(size));
 }
 
 inline void g_get_str(char * const str, const uint64_t * const x, const size_t size)
 {
+#ifdef GMP_MPN
 	const size_t str_size = mpn_get_str((unsigned char *)str, 10, mp_ptr(x), mp_size_t(size));
 	for (size_t i = 0; i < str_size; ++i) str[i] += '0';
 	str[str_size] = '\0';
+#else
+	if (size == 0) { str[0] = '0'; str[1] = '\0'; return; }
+
+	size_t qsize = size;
+	uint64_t * const q = new uint64_t[size];
+	g_copy(q, x, size);
+
+	size_t k = 0;
+	while (qsize != 0)
+	{
+		uint64_t r = 0;
+		for (size_t i = 0, j = qsize - 1; i < qsize; ++i, --j)
+		{
+			const __uint128_t t = (__uint128_t(r) << 64) | q[j];
+			q[j] = uint64_t(t / 10); r = uint64_t(t % 10);
+		}
+		str[k] = '0' + char(r); ++k;
+		if (q[qsize - 1] == 0) --qsize;
+	}
+
+	str[k] = '\0';
+	for (size_t i = 0; i < k / 2; ++i) std::swap(str[i], str[k - i - 1]);
+
+	delete[] q;
+#endif
 }
