@@ -22,8 +22,7 @@ private:
 	bool _is_positive;
 
 public:
-	gint() : _u(0), _is_positive(true) {}	// TODO remove
-	gint(const size_t alloc_size) : _u(alloc_size), _is_positive(true) {}
+	gint(const size_t alloc_size = 1) : _u(alloc_size), _is_positive(true) {}
 	gint(const gint & rhs) : _u(rhs._u), _is_positive(rhs._is_positive) {}
 	explicit gint(const guint & rhs) : _u(rhs), _is_positive(true) {}
  	virtual ~gint() {}
@@ -81,10 +80,8 @@ public:
 		return *this;
 	}
 
-	gint & operator*=(const gint & rhs) { gint t; t.mul(*this, rhs); swap(t); return *this; }
-
- 	gint & lshift(const size_t n) { _u.lshift(n); return *this; }
- 	gint & rshift(const size_t n) { _u.rshift(n); return *this; }
+	gint & lshift(const size_t n) { _u.lshift(n); return *this; }
+	gint & rshift(const size_t n) { _u.rshift(n); return *this; }
 
 	gint & div_exact(const guint & d, const guint & d_inv, const int right_shift) { _u.div_exact(d, d_inv, right_shift); return *this; }
 
@@ -92,7 +89,7 @@ public:
 
 	gfloat to_float() const
 	{
-		gfloat uf = _u.to_float();
+		const gfloat uf = _u.to_float();
 		return _is_positive ? uf : -uf;
 	}
 

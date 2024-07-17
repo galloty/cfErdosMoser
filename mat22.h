@@ -19,7 +19,7 @@ private:
 	guint _a21, _a22;
 
 public:
-	Mat22u() : _a11(1), _a12(1), _a21(1), _a22(1) {}
+	Mat22u() {}
 	virtual ~Mat22u() {}
 
 	const guint & get11() const { return _a11; }
@@ -31,7 +31,7 @@ public:
 
 	void set_gcf(const uint64_t n)
 	{
-		_a11 = n; _a12 = 2 * n + 1; _a12 *= _a11;
+		_a11 = n; _a12 = 2 * n + 1; _a12 *= n;
 		_a21 = 2; _a22 = 5 * n + 2;
 	}
 
@@ -89,34 +89,28 @@ public:
 
 	Mat22 & mul_right(const Mat22u & rhs)
 	{
-		gint t1, t2;
+		const size_t msize = _a12.get_size() + rhs.get12().get_size();
+		gint t1(msize + 1), t2(msize);
 
-		// std::cout << _a11.get_size() << ", " << _a12.get_size() << ", " << _a21.get_size() << ", " << _a22.get_size() << std::endl;
-		// if (rhs._a12.get_size() > 100)
-		// std::cout << " " << rhs._a11.get_size() << ", " << rhs._a12.get_size() << ", " << rhs._a21.get_size() << ", " << rhs._a22.get_size() << std::endl;
+		t1.mul(_a11, rhs.get12()); t2.mul(_a12, rhs.get22()); t1 += t2;
+		t2.mul(_a12, rhs.get21()); _a12.swap(t1); t1.mul(_a11, rhs.get11()); t1 += t2; _a11.swap(t1);
 
-		t1.mul(_a11, gint(rhs.get12())); t2.mul(_a12, gint(rhs.get22())); t1 += t2; t2 = 0;
-		_a11 *= gint(rhs.get11()); _a12 *= gint(rhs.get21()); _a11 += _a12;
-		_a12.swap(t1);
-
-		t1.mul(_a21, gint(rhs.get12())); t2.mul(_a22, gint(rhs.get22())); t1 += t2; t2 = 0;
-		_a21 *= gint(rhs.get11()); _a22 *= gint(rhs.get21()); _a21 += _a22;
-		_a22.swap(t1);
+		t1.mul(_a21, rhs.get12()); t2.mul(_a22, rhs.get22()); t1 += t2;
+		t2.mul(_a22, rhs.get21()); _a22.swap(t1); t1.mul(_a21, rhs.get11()); t1 += t2; _a21.swap(t1);
 
 		return *this;
 	}
 
 	Mat22 & mul_left(const Mat22 & rhs)
 	{
-		gint t1, t2;
+		const size_t msize = _a12.get_size() + rhs._a12.get_size();
+		gint t1(msize + 1), t2(msize);
 
 		t1.mul(_a11, rhs._a21); t2.mul(_a21, rhs._a22); t1 += t2;
-		_a11 *= rhs._a11; _a21 *= rhs._a12; _a11 += _a21;
-		_a21.swap(t1);
+		t2.mul(_a21, rhs._a12); _a21.swap(t1); t1.mul(_a11, rhs._a11); t1 += t2; _a11.swap(t1);
 
 		t1.mul(_a12, rhs._a21); t2.mul(_a22, rhs._a22); t1 += t2;
-		_a12 *= rhs._a11; _a22 *= rhs._a12; _a12 += _a22;
-		_a22.swap(t1);
+		t2.mul(_a22, rhs._a12); _a22.swap(t1); t1.mul(_a12, rhs._a11); t1 += t2; _a12.swap(t1);
 
 		return *this;
 	}
@@ -162,7 +156,7 @@ public:
 
 	bool get_cf_coefficient(guint & coefficient1, guint & coefficient2)
 	{
-		guint t(2);
+		guint t;
 
 		coefficient1.quotient(_a11.get_abs(), _a21.get_abs()); t.quotient(_a12.get_abs(), _a22.get_abs());
 		if (coefficient1.cmp(t) != 0) return false;

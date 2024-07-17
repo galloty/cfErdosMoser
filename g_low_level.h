@@ -10,6 +10,8 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <cstdint>
 #include <immintrin.h>
 
+// #define GMP_MPN	true
+
 #ifdef GMP_MPN
 
 // Low-level functions are implemented using GMP. On Windows, mpn has limit of 2^(31 + 6) bits (41 billion digits).
@@ -85,7 +87,7 @@ inline void g_copy_rev(uint64_t * const y, const uint64_t * const x, const size_
 inline int g_cmp(const uint64_t * const x, const uint64_t * const y, const size_t size)
 {
 #ifdef GMP_MPN
-	return mpn_cmp(mp_srcptr(x), mp_srcptr(y), mp_size_t(n));
+	return mpn_cmp(mp_srcptr(x), mp_srcptr(y), mp_size_t(size));
 #else
 	for (size_t i = 0, j = size - 1; i < size; ++i, --j)
 	{
@@ -143,14 +145,19 @@ inline uint64_t g_mul_1(uint64_t * const x, const size_t size, const uint64_t n)
 
 inline void g_mod_init(const uint64_t p, uint64_t & p_inv, int & e)
 {
+#ifdef GMP_MPN
+	(void)p; (void)p_inv; (void)e;	// remove compiler warning: unused parameter
+#else
 	e = _mod_exp(p);
 	p_inv = _mod_invert(p, e);
+#endif
 }
 
 // size > 0, n < 2^62
 inline uint64_t g_mod_1(const uint64_t * const x, const size_t size, const uint64_t n, const uint64_t n_inv, const int e, const uint64_t f)
 {
 #ifdef GMP_MPN
+	(void)n_inv; (void)e; (void)f;	// remove compiler warning: unused parameter
 	return (uint64_t)mpn_mod_1(mp_srcptr(x), mp_size_t(size), mp_limb_t(n));
 #else
 	uint64_t r = 0;

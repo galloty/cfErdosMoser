@@ -122,8 +122,8 @@ public:
 
 	std::string	get_memory_info() const
 	{
-		const size_t max_size = _max_size * sizeof(uint64_t), max_size_gmp = _max_size_gmp * sizeof(uint64_t);
-		const size_t max_block_size = _max_block_size * sizeof(uint64_t), max_block_size_gmp = _max_block_size_gmp * sizeof(uint64_t);
+		const size_t max_size = _max_size * sizeof(uint64_t), max_size_gmp = _max_size_gmp;
+		const size_t max_block_size = _max_block_size * sizeof(uint64_t), max_block_size_gmp = _max_block_size_gmp;
 
 		size_t size_divisor; std::string size_unit; get_unit(std::max(max_size, max_size_gmp), size_divisor, size_unit);
 		size_t block_size_divisor; std::string block_size_unit; get_unit(std::max(max_block_size, max_block_size_gmp), block_size_divisor, block_size_unit);

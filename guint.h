@@ -95,7 +95,7 @@ private:
 	}
 
 public:
-	guint(const size_t alloc_size) { _alloc(alloc_size); _size = 0; }
+	guint(const size_t alloc_size = 1) { _alloc(alloc_size); _size = 0; }
 	guint(const guint & rhs) { _alloc(rhs._size); _size = rhs._size; g_copy(_d, rhs._d, rhs._size); }
 	virtual ~guint() { _free(); }
 
@@ -334,38 +334,29 @@ public:
 		return *this;
 	}
 
-	// 2^{2*d_bit_size} / d: d_inv > d
+	// 2^{2*d_bit_size} / d: d_inv > d, d_inv_bit_size = d_bit_size + 1 if d is normalized.
 	guint & div_invert(const guint & d)	// *this != d
 	{
 		const size_t dsize = d._size;
 		if (dsize == 0) throw std::runtime_error("divide by zero");
-
-// std::cout << d.to_string() << " (" << dsize << ")" << std::endl;
 
 		guint x(dsize + 1);
 		g_zero(x._d, dsize - 1);
 		x._d[dsize - 1] = (~size_t(0) / (d._d[dsize - 1] >> 32)) << 32; x._d[dsize] = 1;
 		x._size = dsize + 1;
 
-// std::cout << x.to_string() << " (" << x._size << ")" << std::endl;
-
-		guint t(2 * dsize + 8);
-		// size_t h = 0;
+		guint t1(2 * dsize + 8), t2(2 * dsize + 8);
 		do
 		{
 			*this = x;
-			t.sqr(x); t.rshift(dsize - 1); t *= d; t.rshift(dsize + 1);
-			x += x; x -= t;
-			// h++;
-			// if (h == 100) break;
+			t1.sqr(x); t1.rshift(dsize - 1); t2.mul(t1, d); t2.rshift(dsize + 1);
+			x += x; x -= t2;
 		} while (cmp(x) != 0);
 		*this -= 1;
 
-// std::cout << to_string() << " (" << _size << "): " << h << std::endl;
-// exit(0);
-
 		return *this;
 	}
+
 	// *this: dividend, d: divisor, q: quotient, r: remainder
 	// Sources and destinations must be different
 	void div_rem(guint & q, guint & r, const guint & d, const guint & d_inv) const
@@ -374,29 +365,31 @@ public:
 
 		if (size < dsize) { q = 0; r = *this; return; }
 
-		const size_t n = size / dsize + 1;	// >= 2
+		const size_t n = size / dsize, n_r = size % dsize;	// n >= 1
 		r = 0, q = 0;
 		guint q_j(2 * dsize), t(dsize + 1);
+
+		q_j._set_size(n_r);
+		g_copy(q_j._d, &_d[n * dsize], n_r);
+
+		t._div(r, q_j, d, d_inv);
+		q._set_size(n * dsize + t._size);
+		g_copy(&q._d[n * dsize], t._d, t._size);
+
 		for (size_t i = 0, j = n - 1; i < n; ++i, --j)
 		{
-			if (r._size != 0)
-			{
-				q_j = r; q_j.lshift(dsize);
-				g_copy(q_j._d, &_d[j * dsize], dsize);
-			}
-			else
-			{
-				// TODO: first loop, external.
-				q_j._set_size(dsize);
-				for (size_t k = 0; k < dsize; ++k) q_j._d[k] = (j * dsize + k < size) ? _d[j * dsize + k] : 0;
-				q_j._norm();
-			}
+			q_j._set_size(dsize + r._size);
+			g_copy(&q_j._d[dsize], r._d, r._size);
+			g_copy(q_j._d, &_d[j * dsize], dsize);
+			if (r._size == 0) q_j._norm();
 
 			t._div(r, q_j, d, d_inv);
 
-			// TODO: set block
-			q.lshift(dsize); q += t;
+			g_copy(&q._d[j * dsize], t._d, t._size);
+			g_zero(&q._d[j * dsize + t._size], dsize - t._size);
 		}
+
+		q._norm();
 	}
 
 	// *this /= d, remainder must be zero

@@ -45,7 +45,7 @@ private:
 	static const uint64_t _mod_q_f = (-_mod_q) % _mod_q;	// 2^64 mod mod_q
 
 public:
-	CF(Heap & heap) : _heap(heap), _N(0), _cond_b(0), _a_j(0) {}
+	CF(Heap & heap) : _heap(heap) {}
 	virtual ~CF() {}
 
 private:
@@ -85,7 +85,7 @@ private:
 		else
 		{
 			_gcf_extend(M, d, n, size / 2);
-			Mat22u M_r; guint d_r(1); _gcf_extend(M_r, d_r, n + size / 2, size / 2);
+			Mat22u M_r; guint d_r; _gcf_extend(M_r, d_r, n + size / 2, size / 2);
 			M.mul_right(M_r); d *= d_r;
 		}
 	}
@@ -117,7 +117,7 @@ private:
 		Mcf.set_identity();
 
 		// a_j is the jth coefficient of the regular continued fraction
-		guint a_jp1(2), a_jp2(2);
+		guint a_jp1, a_jp2;
 		while (M.get_cf_coefficient(a_jp1, a_jp2))
 		{
 			Mcf.cf_mul(a_jp1); Mcf.cf_mul(a_jp2);
@@ -263,7 +263,7 @@ public:
 			{
 				// Matrix form of the generalized continued fraction: p_{n-2} / q_{n-2} and p_{n-1} / q_{n-1}.
 				// Compute nstep terms of the matrix and its divisor starting at n.
-				Mat22u Mgcf; guint divisor(1);
+				Mat22u Mgcf; guint divisor;
 				time_gcf_extend += gcf_extend(Mgcf, divisor, n, nstep);
 				Mgcf_size = Mgcf.get_byte_count();
 				// divisor_size = divisor.get_byte_count();
@@ -326,7 +326,7 @@ int main()
 		Heap heap;
 		CF cf(heap);
 
-		guint N(0);
+		guint N;
 		for (size_t d = 0; d < fN.size(); ++d)
 		{
 			N = 1; for (size_t i = 0; i < d; ++i) N *= fN[i];
