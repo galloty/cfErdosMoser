@@ -227,7 +227,7 @@ private:
 public:
 	void solve(const guint & N)
 	{
-		_heap.reset_info();
+		_heap.reset();
 
 		_N = N;
 		_cond_b = N; _cond_b *= 180; _cond_b -= 2;

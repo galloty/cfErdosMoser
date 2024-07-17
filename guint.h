@@ -11,103 +11,11 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <stdexcept>
 #include <string>
 #include <sstream>
+#include <queue>
 
 #include "g_low_level.h"
 #include "gfloat.h"
-
-// Memory allocation
-class Heap
-{
-private:
-	static size_t _size, _size_gmp;
-	static size_t _alloc_count, _realloc_count, _free_count, _block_count;
-	static size_t _max_size, _max_block_size, _max_block_count, _max_size_gmp, _max_block_size_gmp;
-
-public:
-	static void * alloc_function(const size_t size)
-	{
-		_size += size;
-		++_alloc_count; ++_block_count;
-		_max_size = std::max(_max_size, _size);
-		_max_block_size = std::max(_max_block_size, size);
-		_max_block_count = std::max(_max_block_count, _block_count);
-		return malloc(size);
-	}
-
-	static void * realloc_function(void * const ptr, const size_t old_size, const size_t new_size)
-	{
-		_size += new_size - old_size;
-		++_realloc_count;
-		_max_size = std::max(_max_size, _size);
-		_max_block_size = std::max(_max_block_size, new_size);
-		return realloc(ptr, new_size);
-	}
-
-	static void free_function(void * const ptr, const size_t size)
-	{
-		_size -= size;
-		++_free_count; --_block_count;
-		free(ptr);
-	}
-
-	static void * allocate_function_gmp(size_t size)
-	{
-		_size_gmp += size;
-		_max_size_gmp = std::max(_max_size_gmp, _size_gmp);
-		_max_block_size_gmp = std::max(_max_block_size_gmp, size);
-		return malloc(size);
-	}
-
-	static void * reallocate_function_gmp(void *ptr, size_t old_size, size_t new_size)
-	{
-		_size_gmp += new_size - old_size;
-		_max_size_gmp = std::max(_max_size_gmp, _size_gmp);
-		_max_block_size_gmp = std::max(_max_block_size_gmp, new_size);
-		return realloc(ptr, new_size);
-	}
-
-	static void free_function_gmp(void *ptr, size_t size) { _size_gmp -= size; if (size > 0) free(ptr); }
-
-	static void get_unit(const size_t size, size_t & divisor, std::string & unit)
-	{
-		if (size < (size_t(10) << 10)) { divisor = 1; unit = "B"; }
-		else if (size < (size_t(10) << 20)) { divisor = size_t(1) << 10; unit = "kB"; }
-		else if (size < (size_t(10) << 30)) { divisor = size_t(1) << 20; unit = "MB"; }
-		else { divisor = size_t(1) << 30; unit = "GB"; }
-	}
-
-public:
-	Heap() { mp_set_memory_functions(allocate_function_gmp, reallocate_function_gmp, free_function_gmp); }
-	virtual ~Heap() { mp_set_memory_functions(nullptr, nullptr, nullptr); }
-
-	std::string	get_memory_size() const
-	{
-		std::ostringstream ss; ss << _size << " + " << _size_gmp << " B";
-		return ss.str();
-	}
-
-	std::string	get_memory_info() const
-	{
-		size_t size_divisor; std::string size_unit; get_unit(std::max(_max_size, _max_size_gmp), size_divisor, size_unit);
-		size_t block_size_divisor; std::string block_size_unit; get_unit(std::max(_max_block_size, _max_block_size_gmp), block_size_divisor, block_size_unit);
-
-		std::ostringstream ss;
-		ss << "max size: " << _max_size / size_divisor << " + " << _max_size_gmp / size_divisor << " " << size_unit << ", "
-			<< "max block size: " << _max_block_size / block_size_divisor << " + " << _max_block_size_gmp / block_size_divisor << " " << block_size_unit << ", "
-			<< "alloc: " << _alloc_count << ", realloc: " << _realloc_count << ", free: " << _free_count << ", max block count: " << _max_block_count << ".";
-		return ss.str();
-	}
-
-	void reset_info()
-	{
-		_alloc_count = 0; _realloc_count = 0; _free_count = 0;
-		_max_size = 0; _max_size_gmp = 0; _max_block_size = 0; _max_block_size_gmp = 0;
-	}
-};
-
-size_t Heap::_size = 0, Heap::_size_gmp = 0;
-size_t Heap::_alloc_count = 0, Heap::_realloc_count = 0, Heap::_free_count = 0, Heap::_block_count = 0;
-size_t Heap::_max_size = 0, Heap::_max_block_size = 0, Heap::_max_block_count = 0, Heap::_max_size_gmp = 0, Heap::_max_block_size_gmp = 0;
+#include "heap.h"
 
 // giant unsigned integer
 class guint
@@ -120,21 +28,21 @@ private:
 private:
 	void _alloc(const size_t size)
 	{
-		_alloc_size = (size / 64 + 1) * 64;
-		_d = (uint64_t *)Heap::alloc_function(_alloc_size * sizeof(uint64_t));
+		_alloc_size = Heap::get_min_size(size);
+		_d = Heap::alloc_function(_alloc_size);
 	}
 
 	void _realloc(const size_t size)
 	{
-		const size_t alloc_size = (size / 64 + 1) * 64;
+		const size_t alloc_size = Heap::get_min_size(size);
 		if (alloc_size != _alloc_size)
 		{
-			_d = (uint64_t *)Heap::realloc_function(_d, _alloc_size * sizeof(uint64_t), alloc_size * sizeof(uint64_t));
+			_d = Heap::realloc_function(_d, _alloc_size, alloc_size);
 			_alloc_size = alloc_size;
 		}
 	}
 
-	void _free() { Heap::free_function(_d, _alloc_size * sizeof(uint64_t)); }
+	void _free() { Heap::free_function(_d, _alloc_size); }
 
 	void _set_size(const size_t size) { _size = size; if (size > _alloc_size) _realloc(size); }
 	void _shrink() { _realloc(_size); }
@@ -418,7 +326,7 @@ public:
 
 		int rshift = 0;
 		const uint64_t * const d = _d;
-		for (size_t i = 0; d[i] == 0; ++i) rshift += 8 * sizeof(uint64_t);
+		for (size_t i = 0; d[i] == 0; ++i) rshift += 64;
 		uint64_t hi = d[_size - 1]; while (hi >> 63 != 1) { hi *= 2; --rshift; }
 		right_shift = rshift;
 
@@ -582,7 +490,7 @@ public:
 		// base 2
 		long double mantissa; size_t exponent;
 		if (size == 1) { mantissa = _d[0]; exponent = 0; }
-		else { mantissa = std::ldexpl(_d[size - 1], 64) + _d[size - 2]; exponent = (size - 2) * sizeof(uint64_t) * 8; };
+		else { mantissa = std::ldexpl(_d[size - 1], 64) + _d[size - 2]; exponent = (size - 2) * 64; };
 		while (mantissa >= 1) { mantissa *= 0.5; ++exponent; }
 		return gfloat(mantissa, exponent);
 	}
