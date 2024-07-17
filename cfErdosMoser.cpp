@@ -31,7 +31,7 @@ class CF
 {
 private:
 	Heap & _heap;
-	gint _N, _cond_b, _a_j;
+	guint _N, _cond_b, _a_j;
 	gfloat _q_j, _q_jm1;
 	uint64_t _q_j_mod, _q_jm1_mod;
 	uint64_t _j;
@@ -45,7 +45,7 @@ private:
 	static const uint64_t _mod_q_f = (-_mod_q) % _mod_q;	// 2^64 mod mod_q
 
 public:
-	CF(Heap & heap) : _heap(heap) {}
+	CF(Heap & heap) : _heap(heap), _N(0), _cond_b(0), _a_j(0) {}
 	virtual ~CF() {}
 
 private:
@@ -59,19 +59,19 @@ private:
 		return ss.str();
 	}
 
-	void _gcf_matrix_divisor(Mat22 & M, gint & d, const uint64_t n, const uint64_t size)
+	void _gcf_extend(Mat22u & M, guint & d, const uint64_t n, const uint64_t size)
 	{
 		if (size == 32)
 		{
 			M.set_gcf(n);
-			Mat22 M_i;
+			Mat22u M_i;
 			for (uint64_t i = 1; i < size; ++i)
 			{
 				M_i.set_gcf(n + i);
 				M.mul_right(M_i);
 			}
 
-			d = 1u;
+			d = 1;
 			for (uint64_t i = 0; i < size; ++i)
 			{
 				const uint64_t n_i = n + i;
@@ -84,27 +84,27 @@ private:
 		}
 		else
 		{
-			_gcf_matrix_divisor(M, d, n, size / 2);
-			Mat22 M_r; gint d_r; _gcf_matrix_divisor(M_r, d_r, n + size / 2, size / 2);
+			_gcf_extend(M, d, n, size / 2);
+			Mat22u M_r; guint d_r(1); _gcf_extend(M_r, d_r, n + size / 2, size / 2);
 			M.mul_right(M_r); d *= d_r;
 		}
 	}
 
-	double gcf_matrix_divisor(Mat22 & M, gint & divisor, const uint64_t n, const uint64_t size)
+	double gcf_extend(Mat22u & M, guint & divisor, const uint64_t n, const uint64_t size)
 	{
 		const auto start = std::chrono::high_resolution_clock::now();
-		_gcf_matrix_divisor(M, divisor, n, size);
+		_gcf_extend(M, divisor, n, size);
 		return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
 	}
 
-	static double gcf_mul(Mat22 & M, const Mat22 & Mgcf)
+	static double gcf_mul(Mat22 & M, const Mat22u & Mgcf)
 	{
 		const auto start = std::chrono::high_resolution_clock::now();
 		M.mul_right(Mgcf);
 		return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
 	}
 
-	static double gcf_div(Mat22 & M, gint & divisor)
+	static double gcf_div(Mat22 & M, guint & divisor)
 	{
 		const auto start = std::chrono::high_resolution_clock::now();
 		M.div(divisor);
@@ -117,7 +117,7 @@ private:
 		Mcf.set_identity();
 
 		// a_j is the jth coefficient of the regular continued fraction
-		gint a_jp1, a_jp2;
+		guint a_jp1(2), a_jp2(2);
 		while (M.get_cf_coefficient(a_jp1, a_jp2))
 		{
 			Mcf.cf_mul(a_jp1); Mcf.cf_mul(a_jp2);
@@ -125,7 +125,7 @@ private:
 			_j += 2;	// j must always be odd, now a_{j+2} is a_j
 			++count;
 
-			if (a_jp2 >= _cond_b)	// We have: (a): j-1 is even, (b) a_j >= 180N - 2
+			if (a_jp2.cmp(_cond_b) >= 0)	// We have: (a): j-1 is even, (b) a_j >= 180N - 2
 			{
 				_a_j = a_jp2;
 				found = true;
@@ -138,7 +138,7 @@ private:
 
 	size_t _cf_reduce_half(const size_t level, Mat22 & M, Mat22 & Mcf, bool & found)
 	{
-		const size_t n = M.get_min_word_count();
+		const size_t n = M.get_min_size();
 		if (n < 32) return _cf_reduce(M, Mcf, found);
 
 		Mat22 M_lo; M.split(M_lo, n / 2);
@@ -151,7 +151,7 @@ private:
 
 		if (found) return count1;
 
-		const size_t n2 = M.get_min_word_count();
+		const size_t n2 = M.get_min_size();
 		Mat22 Mcf2;
 		if (n2 < 32)
 		{
@@ -195,7 +195,7 @@ private:
 	bool condition_c() const
 	{
 		const uint64_t q_j_mod = _q_jm1_mod;	// a step backward
-		const uint64_t g6 = q_j_mod % 6u;
+		const uint64_t g6 = q_j_mod % 6;
 		return ((g6 == 1) || (g6 == 5));	// (c) gcd(q_{j , 6) = 1
 	}
 
@@ -203,11 +203,11 @@ private:
 	{
 		// a step backward
 		const uint64_t j = _j - 1;
-		const gint & a_jp1 = _a_j;
+		const guint & a_jp1 = _a_j;
 		const gfloat & q_j = _q_jm1;
 		const uint64_t q_j_mod = _q_jm1_mod;
 
-		const uint64_t g6 = q_j_mod % 6u;
+		const uint64_t g6 = q_j_mod % 6;
 
 		std::ostringstream ss;
 		ss << _N.to_string() << ", " << j << ", " << a_jp1.to_string() << ", " << q_j.to_string() << ", " << ((g6 == 1) ? "+" : "-") << "1";
@@ -225,12 +225,12 @@ private:
 	}
 
 public:
-	void solve(const gint & N)
+	void solve(const guint & N)
 	{
-		_heap.reset_max_size();
+		_heap.reset_info();
 
 		_N = N;
-		_cond_b = N; _cond_b *= 180; _cond_b -= 2u;
+		_cond_b = N; _cond_b *= 180; _cond_b -= 2;
 
 		_factor.init();
 
@@ -249,11 +249,11 @@ public:
 		M.init_gcf(N);
 
 		// Denominator of the regular continued fraction: q_j and q_{j-1}.
-		_q_j_mod = 0u; _q_jm1_mod = 1u;
+		_q_j_mod = 0; _q_jm1_mod = 1;
 		_q_j = gfloat(0, 0); _q_jm1 = gfloat(1, 0);
 
 		const std::string Nstr = N.to_string();
-		double time_gcf_matrix_divisor = 0, time_gcf_mul = 0, time_gcf_div = 0, time_cf_reduce = 0, time_elapsed = 0, prev_time_elapsed = 0;
+		double time_gcf_extend = 0, time_gcf_mul = 0, time_gcf_div = 0, time_cf_reduce = 0, time_elapsed = 0, prev_time_elapsed = 0;
 		size_t M_min_size = 0, Mgcf_size = 0;	// divisor_size = 0, M_max_size = 0;
 		uint64_t j_prev = _j;
 
@@ -263,8 +263,8 @@ public:
 			{
 				// Matrix form of the generalized continued fraction: p_{n-2} / q_{n-2} and p_{n-1} / q_{n-1}.
 				// Compute nstep terms of the matrix and its divisor starting at n.
-				Mat22 Mgcf; gint divisor;
-				time_gcf_matrix_divisor += gcf_matrix_divisor(Mgcf, divisor, n, nstep);
+				Mat22u Mgcf; guint divisor(1);
+				time_gcf_extend += gcf_extend(Mgcf, divisor, n, nstep);
 				Mgcf_size = Mgcf.get_byte_count();
 				// divisor_size = divisor.get_byte_count();
 
@@ -281,7 +281,7 @@ public:
 
 			if (Mgcf_size < M_min_size / 4) nstep *= 2;
 
-			time_elapsed = time_gcf_matrix_divisor + time_gcf_mul + time_gcf_div + time_cf_reduce;
+			time_elapsed = time_gcf_extend + time_gcf_mul + time_gcf_div + time_cf_reduce;
 
 			if (found) found = condition_c();
 
@@ -289,15 +289,13 @@ public:
 			{
 				prev_time_elapsed = time_elapsed;
 				std::ostringstream ss;
-				ss	<< "N = " << Nstr << ", n = " << n << " [" << nstep << "], j = " << _j << " (+" << _j - j_prev << "), q_j = " << _q_j.to_string() << ", "
+				ss	<< "N = " << Nstr << ", n = " << n << " [" << nstep << "], j = " << _j << " (+" << _j - j_prev << "), "
+					<< "q_j = " << _q_j.to_string() << ", elapsed time: " << format_time(time_elapsed) << "." << std::endl;
 					// << "M_max: " << M_max_size << ", M_min: " << M_min_size << ", Mgcf: " << Mgcf_size << ", divisor: " << divisor_size << ", "
-					<< "memory size: " << std::setprecision(3)
-					<< _heap.get_max_size() / (1u << 20) << " + " << _heap.get_max_size_gmp() / (1u << 20) << " MB ("
-					<< _heap.get_max_block_size() / (1u << 20) << " + " << _heap.get_max_block_size_gmp() / (1u << 20) << " MB), "
-					<< "elapsed time: " << format_time(time_elapsed) << " ("	// "." << std::endl;
-					<< time_gcf_matrix_divisor * 100 / time_elapsed << "% + "
-					<< time_gcf_mul * 100 / time_elapsed << "% + " << time_gcf_div * 100 / time_elapsed << "% + "
-					<< time_cf_reduce * 100 / time_elapsed << "%)." << std::endl;
+				ss	<< "    Memory usage: " << _heap.get_memory_info() << std::endl;
+				ss	<< "    CPU usage: " << std::setprecision(3)
+					<< "gcf_extend: " << time_gcf_extend * 100 / time_elapsed << "%, gcf_mul: " << time_gcf_mul * 100 / time_elapsed << "%, "
+					<< "gcf_div: " << time_gcf_div * 100 / time_elapsed << "%, cf_reduce: " << time_cf_reduce * 100 / time_elapsed << "%." << std::endl;
 				pio::print(ss.str());
 				j_prev = _j;
 			}
@@ -305,8 +303,8 @@ public:
 			if (found) found = condition_d();
 		}
 
-		_N = 0u; _cond_b = 0u; _a_j = 0u; M.set_zero();
-		std::cout << "Memory size: " << _heap.get_size() << " + " << _heap.get_size_gmp() << " B." << std::endl;
+		_N = 0; _cond_b = 0; _a_j = 0; M.set_zero();
+		std::cout << "Memory size: " << _heap.get_memory_size() << "." << std::endl;
 	}
 };
 
@@ -328,10 +326,10 @@ int main()
 		Heap heap;
 		CF cf(heap);
 
-		gint N;
+		guint N(0);
 		for (size_t d = 0; d < fN.size(); ++d)
 		{
-			N = 1u; for (size_t i = 0; i < d; ++i) N *= fN[i];
+			N = 1; for (size_t i = 0; i < d; ++i) N *= fN[i];
 			cf.solve(N);
 		}
 

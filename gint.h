@@ -21,42 +21,24 @@ private:
 	guint _u;
 	bool _is_positive;
 
-private:
-	int _cmp(const gint & rhs) const
-	{
-		const bool is_positive = _is_positive, ris_positive = rhs._is_positive;
-		const bool is_zero = _u.is_zero(), ris_zero = rhs._u.is_zero();
-
-		// 0 may be positive or negative
-		if (is_zero)
-		{
-			if (ris_zero) return 0;
-			return ris_positive ? -1 : 1;
-		}
-		if (ris_zero) return is_positive ? 1 : -1;
-
-		if (is_positive != ris_positive) return is_positive ? 1 : -1;
-		const int ucmp = _u.cmp(rhs._u);
-		return is_positive ? ucmp : -ucmp;
-	}
-
 public:
-	gint() : _is_positive(true) {}
-	gint(const uint64_t n) : _u(n), _is_positive(true) {}
+	gint() : _u(0), _is_positive(true) {}	// TODO remove
+	gint(const size_t alloc_size) : _u(alloc_size), _is_positive(true) {}
 	gint(const gint & rhs) : _u(rhs._u), _is_positive(rhs._is_positive) {}
+	explicit gint(const guint & rhs) : _u(rhs), _is_positive(true) {}
  	virtual ~gint() {}
 
- 	size_t get_word_count() const { return _u.get_word_count(); }
+ 	size_t get_size() const { return _u.get_size(); }
  	size_t get_byte_count() const { return _u.get_byte_count(); }
+	bool is_positive() const { return (_is_positive || (get_size() == 0)); }
+	bool is_negative() const { return (!_is_positive || (get_size() == 0)); }
+
+	const guint & get_abs() const { return _u; }
 
 	gint & operator=(const uint64_t n) { _u = n; _is_positive = true; return *this; }
 	gint & operator=(const gint & rhs) { if (&rhs != this) { _u = rhs._u; _is_positive = rhs._is_positive; } return *this; }
 
 	gint & swap(gint & rhs) { _u.swap(rhs._u); std::swap(_is_positive, rhs._is_positive); return *this; }
-
- 	bool operator==(const gint & rhs) const { return (_cmp(rhs) == 0); }
- 	bool operator!=(const gint & rhs) const { return (_cmp(rhs) != 0); }
- 	bool operator>=(const gint & rhs) const { return (_cmp(rhs) >= 0); }
 
 	gint & operator+=(const uint64_t n) { if (_is_positive) _u += n; else _is_positive = !_u.sub(n); return *this; }
 	gint & operator-=(const uint64_t n) { if (_is_positive) _is_positive = _u.sub(n); else _u += n; return *this; }
@@ -92,39 +74,21 @@ public:
 		return *this;
 	}
 
+	gint & mul(const gint & x, const guint & y)	// *this != x
+	{
+		_u.mul(x._u, y);
+		_is_positive = x._is_positive;
+		return *this;
+	}
+
 	gint & operator*=(const gint & rhs) { gint t; t.mul(*this, rhs); swap(t); return *this; }
 
  	gint & lshift(const size_t n) { _u.lshift(n); return *this; }
  	gint & rshift(const size_t n) { _u.rshift(n); return *this; }
 
-	gint & div_norm(int & right_shift) { _u.div_norm(right_shift); return *this; }
+	gint & div_exact(const guint & d, const guint & d_inv, const int right_shift) { _u.div_exact(d, d_inv, right_shift); return *this; }
 
-	// 2^{2*d_bit_size} / d: |d_inv| > |d|
-	gint & div_invert(const gint & d)	// *this != d
-	{
-		_u.div_invert(d._u);
-		_is_positive = d._is_positive;
-		return *this;
-	}
-
-	gint & div_exact(const gint & d, const gint & d_inv, const int right_shift)
-	{
-		_u.div_exact(d._u, d_inv._u, right_shift);
-		return *this;
-	}
-
-	gint & quotient(const gint & x, const gint & y)	// *this != x, *this != y
-	{
-		if (!x._is_positive || !y._is_positive) throw std::runtime_error("divide: negative input");
-		_u.quotient(x._u, y._u);
-		return *this;
-	}
-
-	void split(gint & lo, const size_t n)
-	{
-		_u.split(lo._u, n);
-		lo._is_positive = _is_positive;
-	}
+	void split(gint & lo, const size_t n) { _u.split(lo._u, n); lo._is_positive = _is_positive; }
 
 	gfloat to_float() const
 	{

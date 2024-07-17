@@ -29,7 +29,7 @@ inline uint64_t _addc(const uint64_t x, const uint64_t y, uint64_t & carry)
 inline uint64_t _subb(const uint64_t x, const uint64_t y, uint64_t & borrow)
 {
 	const __uint128_t t = x - __uint128_t(y) - borrow;
-	borrow = uint64_t(t >> 64) & 1u;
+	borrow = uint64_t(t >> 64) & 1;
 	return uint64_t(t);
 }
 

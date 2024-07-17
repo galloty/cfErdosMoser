@@ -10,6 +10,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include <sstream>
 
 #include "g_low_level.h"
 #include "gfloat.h"
@@ -18,27 +19,36 @@ Please give feedback to the authors if improvement is realized. It is distribute
 class Heap
 {
 private:
-	static size_t _size, _max_size, _max_block_size;
-	static size_t _size_gmp, _max_size_gmp, _max_block_size_gmp;
+	static size_t _size, _size_gmp;
+	static size_t _alloc_count, _realloc_count, _free_count, _block_count;
+	static size_t _max_size, _max_block_size, _max_block_count, _max_size_gmp, _max_block_size_gmp;
 
 public:
-	static void * allocate_function(const size_t size)
+	static void * alloc_function(const size_t size)
 	{
 		_size += size;
+		++_alloc_count; ++_block_count;
 		_max_size = std::max(_max_size, _size);
 		_max_block_size = std::max(_max_block_size, size);
+		_max_block_count = std::max(_max_block_count, _block_count);
 		return malloc(size);
 	}
 
-	static void * reallocate_function(void * const ptr, const size_t old_size, const size_t new_size)
+	static void * realloc_function(void * const ptr, const size_t old_size, const size_t new_size)
 	{
 		_size += new_size - old_size;
+		++_realloc_count;
 		_max_size = std::max(_max_size, _size);
 		_max_block_size = std::max(_max_block_size, new_size);
 		return realloc(ptr, new_size);
 	}
 
-	static void free_function(void * const ptr, const size_t size) { _size -= size; if (size > 0) free(ptr); }
+	static void free_function(void * const ptr, const size_t size)
+	{
+		_size -= size;
+		++_free_count; --_block_count;
+		free(ptr);
+	}
 
 	static void * allocate_function_gmp(size_t size)
 	{
@@ -58,54 +68,76 @@ public:
 
 	static void free_function_gmp(void *ptr, size_t size) { _size_gmp -= size; if (size > 0) free(ptr); }
 
+	static void get_unit(const size_t size, size_t & divisor, std::string & unit)
+	{
+		if (size < (size_t(10) << 10)) { divisor = 1; unit = "B"; }
+		else if (size < (size_t(10) << 20)) { divisor = size_t(1) << 10; unit = "kB"; }
+		else if (size < (size_t(10) << 30)) { divisor = size_t(1) << 20; unit = "MB"; }
+		else { divisor = size_t(1) << 30; unit = "GB"; }
+	}
+
 public:
 	Heap() { mp_set_memory_functions(allocate_function_gmp, reallocate_function_gmp, free_function_gmp); }
 	virtual ~Heap() { mp_set_memory_functions(nullptr, nullptr, nullptr); }
 
-	size_t get_size() const { return _size; }
-	size_t get_max_size() const { return _max_size; }
-	size_t get_max_block_size() const { return _max_block_size; }
-	size_t get_size_gmp() const { return _size_gmp; }
-	size_t get_max_size_gmp() const { return _max_size_gmp; }
-	size_t get_max_block_size_gmp() const { return _max_block_size_gmp; }
+	std::string	get_memory_size() const
+	{
+		std::ostringstream ss; ss << _size << " + " << _size_gmp << " B";
+		return ss.str();
+	}
 
-	void reset_max_size() { _max_size = 0; _max_size_gmp = 0; _max_block_size = 0; _max_block_size_gmp = 0; }
+	std::string	get_memory_info() const
+	{
+		size_t size_divisor; std::string size_unit; get_unit(std::max(_max_size, _max_size_gmp), size_divisor, size_unit);
+		size_t block_size_divisor; std::string block_size_unit; get_unit(std::max(_max_block_size, _max_block_size_gmp), block_size_divisor, block_size_unit);
+
+		std::ostringstream ss;
+		ss << "max size: " << _max_size / size_divisor << " + " << _max_size_gmp / size_divisor << " " << size_unit << ", "
+			<< "max block size: " << _max_block_size / block_size_divisor << " + " << _max_block_size_gmp / block_size_divisor << " " << block_size_unit << ", "
+			<< "alloc: " << _alloc_count << ", realloc: " << _realloc_count << ", free: " << _free_count << ", max block count: " << _max_block_count << ".";
+		return ss.str();
+	}
+
+	void reset_info()
+	{
+		_alloc_count = 0; _realloc_count = 0; _free_count = 0;
+		_max_size = 0; _max_size_gmp = 0; _max_block_size = 0; _max_block_size_gmp = 0;
+	}
 };
 
-size_t Heap::_size = 0, Heap::_max_size = 0, Heap::_max_block_size = 0;
-size_t Heap::_size_gmp = 0, Heap::_max_size_gmp = 0, Heap::_max_block_size_gmp = 0;
+size_t Heap::_size = 0, Heap::_size_gmp = 0;
+size_t Heap::_alloc_count = 0, Heap::_realloc_count = 0, Heap::_free_count = 0, Heap::_block_count = 0;
+size_t Heap::_max_size = 0, Heap::_max_block_size = 0, Heap::_max_block_count = 0, Heap::_max_size_gmp = 0, Heap::_max_block_size_gmp = 0;
 
 // giant unsigned integer
 class guint
 {
 private:
-	size_t _alloc;
+	size_t _alloc_size;
 	size_t _size;
 	uint64_t * _d;
 
 private:
-	void _allocate(const size_t size)
+	void _alloc(const size_t size)
 	{
-		_alloc = (size / 1024 + 1) * 1024;
-		_size = size;
-		_d = (uint64_t *)Heap::allocate_function(_alloc * sizeof(uint64_t));
+		_alloc_size = (size / 64 + 1) * 64;
+		_d = (uint64_t *)Heap::alloc_function(_alloc_size * sizeof(uint64_t));
 	}
 
-	void _reallocate(const size_t size)
+	void _realloc(const size_t size)
 	{
-		if ((size > _alloc) || (_alloc - size > 1024 * 1024))
+		const size_t alloc_size = (size / 64 + 1) * 64;
+		if (alloc_size != _alloc_size)
 		{
-			const size_t alloc = (size / 1024 + 1) * 1024;
-			_d = (uint64_t *)Heap::reallocate_function(_d, _alloc * sizeof(uint64_t), alloc * sizeof(uint64_t));
-			_alloc = alloc;
+			_d = (uint64_t *)Heap::realloc_function(_d, _alloc_size * sizeof(uint64_t), alloc_size * sizeof(uint64_t));
+			_alloc_size = alloc_size;
 		}
-		_size = size;
 	}
 
-	void _free()
-	{
-		Heap::free_function(_d, _alloc * sizeof(uint64_t));
-	}
+	void _free() { Heap::free_function(_d, _alloc_size * sizeof(uint64_t)); }
+
+	void _set_size(const size_t size) { _size = size; if (size > _alloc_size) _realloc(size); }
+	void _shrink() { _realloc(_size); }
 
 	void _norm()
 	{
@@ -124,49 +156,48 @@ private:
 		// r = x >> (ysize - 1)
 		if (xsize <= ysize - 1)
 		{
-			*this = 0u;
+			*this = 0;
 			r = x;
 		}
 		else
 		{
-			r._reallocate(xsize - (ysize - 1));
+			r._set_size(xsize - (ysize - 1));
 			g_copy(r._d, &x._d[ysize - 1], xsize - (ysize - 1));
 
 			// *this = (r * y_inv) >> (ysize + 1)
 			mul(r, y_inv);
 			if (_size <= ysize + 1)
 			{
-				*this = 0u;
+				*this = 0;
 				r = x;
 			}
 			else
 			{
 				g_copy(_d, &_d[ysize + 1], _size - (ysize + 1));
-				_reallocate(_size - (ysize + 1));
+				_set_size(_size - (ysize + 1));
 
 				// r = x - *this * y
 				r.mul(*this, y);
 				if (r.sub(x)) std::cout << "Warning: _div" << std::endl;	// if x > r then sub returns x - r
 
 				size_t h = 0;
-				while (r.cmp(y) >= 0) { r -= y; *this += 1u; ++h; if (h > 1) std::cout << "Warning: _div" << std::endl; }
+				while (r.cmp(y) >= 0) { r -= y; *this += 1; ++h; if (h > 1) std::cout << "Warning: _div" << std::endl; }
 			}
 		}
 	}
 
 public:
-	guint() { _allocate(0); }
-	guint(const uint64_t n) { _allocate((n == 0) ? 0 : 1); _d[0] = n; }
-	guint(const guint & rhs) { _allocate(rhs._size); g_copy(_d, rhs._d, rhs._size); }
+	guint(const size_t alloc_size) { _alloc(alloc_size); _size = 0; }
+	guint(const guint & rhs) { _alloc(rhs._size); _size = rhs._size; g_copy(_d, rhs._d, rhs._size); }
 	virtual ~guint() { _free(); }
 
-	size_t get_word_count() const { return _size; }
-	size_t get_byte_count() const { return get_word_count() * sizeof(uint64_t); }
+	size_t get_size() const { return _size; }
+	size_t get_byte_count() const { return get_size() * sizeof(uint64_t); }
 
-	guint & operator=(const uint64_t n) { _reallocate((n == 0) ? 0 : 1); _d[0] = n; return *this; }
-	guint & operator=(const guint & rhs) { if (&rhs != this) { _reallocate(rhs._size); g_copy(_d, rhs._d, rhs._size); } return *this; }
+	guint & operator=(const uint64_t n) { _set_size((n == 0) ? 0 : 1); _d[0] = n; return *this; }
+	guint & operator=(const guint & rhs) { if (&rhs != this) { _set_size(rhs._size); g_copy(_d, rhs._d, rhs._size); } return *this; }
 
-	guint & swap(guint & rhs) { std::swap(_alloc, rhs._alloc); std::swap(_size, rhs._size); std::swap(_d, rhs._d); return *this; }
+	guint & swap(guint & rhs) { std::swap(_alloc_size, rhs._alloc_size); std::swap(_size, rhs._size); std::swap(_d, rhs._d); return *this; }
 
 	bool is_zero() const { return (_size == 0); }
 
@@ -186,7 +217,7 @@ public:
 			const uint64_t carry = g_add_1(_d, size, n);
 			if (carry != 0)
 			{
-				_reallocate(size + 1);
+				_set_size(size + 1);
 				_d[size] = carry;
 			}
 		}
@@ -201,11 +232,11 @@ public:
 		const size_t size = _size;
 		uint64_t * const d = _d;
 
-		if (size == 0) { d[0] = n; _size = 1; return false; }
+		if (size == 0) { _set_size(1); _d[0] = n; return false; }
 		if ((size == 1) && (d[0] < n)) { d[0] = n - d[0]; return false; }
 
 		g_sub_1(d, size, n);
-		if (d[size - 1] == 0) --_size;
+		if (d[size - 1] == 0) _set_size(size - 1);
 		return true;
 	}
 
@@ -215,13 +246,13 @@ public:
 	guint & operator*=(const uint64_t n)
 	{
 		const size_t size = _size;
-		if ((size == 0) || (n == 0)) { *this = 0u; }
+		if ((size == 0) || (n == 0)) { *this = 0; }
 		else
 		{
 			const uint64_t carry = g_mul_1(_d, size, n);
 			if (carry != 0)
 			{
-				_reallocate(size + 1);
+				_set_size(size + 1);
 				_d[size] = carry;
 			}
 		}
@@ -247,10 +278,10 @@ public:
 			if (rsize != 0)
 			{
 				const size_t new_size = std::max(size, rsize) + 1;
-				_reallocate(new_size);
+				_set_size(new_size);
 				uint64_t * const d = _d;
 				const uint64_t carry = (size >= rsize) ? g_add(d, d, size, rhs._d, rsize) : g_add(d, rhs._d, rsize, d, size);
-				if (carry != 0) d[new_size - 1] = carry; else --_size;
+				if (carry != 0) d[new_size - 1] = carry; else _set_size(new_size - 1);
 			}
 		}
 		return *this;
@@ -272,7 +303,7 @@ public:
 		}
 		if (size < rsize)
 		{
-			_reallocate(rsize);
+			_set_size(rsize);
 			g_sub(_d, rhs._d, rsize, _d, size);
 			_norm();
 			return false;
@@ -292,7 +323,7 @@ public:
 			_norm();
 			return false;
 		}
-		_size = 0;
+		_set_size(0);
 		return true;
 	}
 
@@ -302,35 +333,35 @@ public:
 	guint & mul(const guint & x, const guint & y)	// *this != x, *this != y
 	{
 		const size_t xsize = x._size, ysize = y._size;
-		if ((xsize == 0) || (ysize == 0)) { *this = 0u; return *this; }
+		if ((xsize == 0) || (ysize == 0)) { *this = 0; return *this; }
 		const size_t new_size = xsize + ysize;
-		_reallocate(new_size);
+		_set_size(new_size);
 		uint64_t * const d = _d;
 		g_mul(d, x._d, xsize, y._d, ysize);
-		if (d[new_size - 1] == 0) --_size;
+		if (d[new_size - 1] == 0) _set_size(new_size - 1);
 		return *this;
 	}
 
 	guint & sqr(const guint & x)	// *this != x
 	{
 		const size_t size = x._size;
-		if (size == 0) { *this = 0u; return *this; }
+		if (size == 0) { *this = 0; return *this; }
 		const size_t new_size = size + size;
-		_reallocate(new_size);
+		_set_size(new_size);
 		uint64_t * const d = _d;
 		g_sqr(d, x._d, size);
-		if (d[new_size - 1] == 0) --_size;
+		if (d[new_size - 1] == 0) _set_size(new_size - 1);
 		return *this;
 	}
 
-	guint & operator*=(const guint & rhs) { guint t; t.mul(*this, rhs); swap(t); return *this; }
+	guint & operator*=(const guint & rhs) { guint t(_size + rhs._size); t.mul(*this, rhs); swap(t); return *this; }
 
 	guint & lshift(const size_t n)
 	{
 		const size_t size = _size;
 		if (size != 0)
 		{
-			_reallocate(size + n);
+			_set_size(size + n);
 			uint64_t * const d = _d;
 			g_copy_rev(&d[n], d, size);
 			g_zero(d, n);
@@ -341,11 +372,11 @@ public:
 	guint & rshift(const size_t n)
 	{
 		const size_t size = _size;
-		if (size <= n) *this = 0u;
+		if (size <= n) *this = 0;
 		else
 		{
 			g_copy(_d, &_d[n], size - n);
-			_reallocate(size - n);
+			_set_size(size - n);
 		}
 		return *this;
 	}
@@ -358,7 +389,7 @@ public:
 		if (s_64 == 0) return lshift(s_size);
 
 		const uint64_t h = _d[size - 1] >> (64 - s_64);
-		_reallocate(size + s_size + ((h != 0) ? 1 : 0));
+		_set_size(size + s_size + ((h != 0) ? 1 : 0));
 		uint64_t * const d = _d;
 		if (h != 0) d[size + s_size] = h;
 		for (size_t j = size - 1; j > 0; --j) d[j + s_size] = (d[j] << s_64) | (d[j - 1] >> (64 - s_64));
@@ -370,14 +401,14 @@ public:
 	guint & operator>>=(const size_t s)
 	{
 		const size_t s_size = s / 64, s_64 = s % 64, size = _size;
-		if (size <= s_size) { *this = 0u; return *this; }
+		if (size <= s_size) { *this = 0; return *this; }
 		if (s_64 == 0) return rshift(s_size);
 
 		uint64_t * const d = _d;
 		for (size_t i = 0; i < size - s_size - 1; ++i) d[i] = (d[i + s_size] >> s_64) | (d[i + s_size + 1] << (64 - s_64));
 		const uint64_t l = d[size - 1] >> s_64;
 		d[size - s_size - 1] = l;
-		_reallocate(size - s_size - ((l == 0) ? 1 : 0));
+		_set_size(size - s_size - ((l == 0) ? 1 : 0));
 		return *this;
 	}
 
@@ -403,24 +434,24 @@ public:
 
 // std::cout << d.to_string() << " (" << dsize << ")" << std::endl;
 
-		guint x;
-		x._reallocate(dsize + 1);
+		guint x(dsize + 1);
 		g_zero(x._d, dsize - 1);
-		x._d[dsize] = 1; x._d[dsize - 1] = (~size_t(0) / (d._d[dsize - 1] >> 32)) << 32;
+		x._d[dsize - 1] = (~size_t(0) / (d._d[dsize - 1] >> 32)) << 32; x._d[dsize] = 1;
+		x._size = dsize + 1;
 
 // std::cout << x.to_string() << " (" << x._size << ")" << std::endl;
 
-		*this = 0u;
-		size_t h = 0;
-		while (cmp(x) != 0)
+		guint t(2 * dsize + 8);
+		// size_t h = 0;
+		do
 		{
 			*this = x;
-			guint t; t.sqr(x); t.rshift(dsize - 1); t *= d; t.rshift(dsize + 1);
+			t.sqr(x); t.rshift(dsize - 1); t *= d; t.rshift(dsize + 1);
 			x += x; x -= t;
-			h++;
+			// h++;
 			// if (h == 100) break;
-		}
-		*this -= 1u;
+		} while (cmp(x) != 0);
+		*this -= 1;
 
 // std::cout << to_string() << " (" << _size << "): " << h << std::endl;
 // exit(0);
@@ -433,11 +464,11 @@ public:
 	{
 		const size_t size = _size, dsize = d._size;
 
-		if (size < dsize) { q = 0u; r = *this; return; }
+		if (size < dsize) { q = 0; r = *this; return; }
 
 		const size_t n = size / dsize + 1;	// >= 2
-		r = 0u, q = 0u;
-		guint q_j, t;
+		r = 0, q = 0;
+		guint q_j(2 * dsize), t(dsize + 1);
 		for (size_t i = 0, j = n - 1; i < n; ++i, --j)
 		{
 			if (r._size != 0)
@@ -448,12 +479,11 @@ public:
 			else
 			{
 				// TODO: first loop, external.
-				q_j._reallocate(dsize);
+				q_j._set_size(dsize);
 				for (size_t k = 0; k < dsize; ++k) q_j._d[k] = (j * dsize + k < size) ? _d[j * dsize + k] : 0;
 				q_j._norm();
 			}
 
-			// TODO: single variable x in, r out
 			t._div(r, q_j, d, d_inv);
 
 			// TODO: set block
@@ -466,7 +496,7 @@ public:
 	{
 		if (right_shift > 0) *this >>= right_shift; else if (right_shift < 0) *this <<= -right_shift;
 
-		guint q, r; div_rem(q, r, d, d_inv);
+		guint q(_size - d._size + 1), r(d._size); div_rem(q, r, d, d_inv);
 		if (r._size != 0) throw std::runtime_error("div_exact failed");
  		*this = q;
 		return *this;
@@ -478,44 +508,55 @@ public:
 		const size_t xsize = x._size, ysize = y._size;
 
 		if (ysize == 0) throw std::runtime_error("divide by zero");
-		if ((xsize == 0) || (ysize > xsize)) { *this = 0u; return *this; }
+		if ((xsize == 0) || (ysize > xsize)) { *this = 0; return *this; }
 
 		if (xsize == 1) { *this = x._d[0] / y._d[0]; return *this; }
 
 		if (xsize == ysize)	// Lehmer's gcd: 97.3%
 		{
-			__uint128_t n = (__uint128_t(x._d[xsize - 1]) << 64) | x._d[xsize - 2];
-			__uint128_t d = (__uint128_t(y._d[ysize - 1]) << 64) | y._d[ysize - 2];
-			if ((n == ~__uint128_t(0)) || (d == ~__uint128_t(0))) { n >>= 1; d >>= 1; }
-			const __uint128_t q_1 = (n + 1) / d, q_2 = n / (d + 1);
-			if (q_1 == q_2)
+			uint64_t n64 = x._d[xsize - 1], d64 = y._d[ysize - 1];
+			if ((n64 == ~uint64_t(0)) || (d64 == ~uint64_t(0))) { n64 >>= 1; d64 >>= 1; }
+			if (d64 != 0)
 			{
-				const uint64_t q_h = uint64_t(q_1 >> 64), q_l = uint64_t(q_1);
-				if (q_h != 0) { _reallocate(2); _d[0] = q_l; _d[1] = q_h; }
-				else *this = q_l;
-				return *this;
+				const uint64_t q = (n64 + 1) / d64;
+				if (q == n64 / (d64 + 1)) { *this = q; return *this; }	// 91.7%
+			}
+
+			__uint128_t n128 = (__uint128_t(x._d[xsize - 1]) << 64) | x._d[xsize - 2], d128 = (__uint128_t(y._d[ysize - 1]) << 64) | y._d[ysize - 2];
+			if ((n128 == ~__uint128_t(0)) || (d128 == ~__uint128_t(0))) { n128 >>= 1; d128 >>= 1; }
+			if (d128 != 0)
+			{
+				const __uint128_t q = (n128 + 1) / d128;
+				if (q == n128 / (d128 + 1))	// 5.6%
+				{
+					const uint64_t q_h = uint64_t(q >> 64), q_l = uint64_t(q);
+					if (q_h != 0) { _set_size(2); _d[0] = q_l; _d[1] = q_h; } else *this = q_l;
+					return *this;
+				}
 			}
 		}
 
 		if (xsize == ysize + 1)	// Lehmer's gcd: 2.7%
 		{
-			__uint128_t n = (__uint128_t(x._d[xsize - 1]) << 64) | x._d[xsize - 2];
-			uint64_t d = y._d[ysize - 1];
-			if (n == ~__uint128_t(0)) { n >>= 1; d >>= 1; }
-			const __uint128_t q_1 = (n + 1) / d, q_2 = n / (__uint128_t(d) + 1);
-			if (q_1 == q_2)
+			__uint128_t n128 = (__uint128_t(x._d[xsize - 1]) << 64) | x._d[xsize - 2];
+			uint64_t d64 = y._d[ysize - 1];
+			if (n128 == ~__uint128_t(0)) { n128 >>= 1; d64 >>= 1; }
+			if (d64 != 0)
 			{
-				const uint64_t q_h = uint64_t(q_1 >> 64), q_l = uint64_t(q_1);
-				if (q_h != 0) { _reallocate(2); _d[0] = q_l; _d[1] = q_h; }
-				else *this = q_l;
-				return *this;
+				const __uint128_t q = (n128 + 1) / d64;
+				if (q == n128 / (__uint128_t(d64) + 1))
+				{
+					const uint64_t q_h = uint64_t(q >> 64), q_l = uint64_t(q);
+					if (q_h != 0) { _set_size(2); _d[0] = q_l; _d[1] = q_h; } else *this = q_l;
+					return *this;
+				}
 			}
 		}
 
 		// Lehmer's gcd: 0%
-		int right_shift; guint d = y, d_inv; d.div_norm(right_shift); d_inv.div_invert(d);
+		int right_shift; guint d = y; d.div_norm(right_shift); guint d_inv(d._size + 1); d_inv.div_invert(d);
 		*this = x; if (right_shift > 0) *this >>= right_shift; else if (right_shift < 0) *this <<= -right_shift;
-		guint q, r; div_rem(q, r, d, d_inv);
+		guint q(_size - d._size + 1), r(d._size); div_rem(q, r, d, d_inv);
 		*this = q;
 		return *this;
 	}
@@ -525,12 +566,12 @@ public:
 		const size_t size = _size;
 		if (n >= size) throw std::runtime_error("split failed");
 
-		lo._reallocate(n);
+		lo._set_size(n);
 		g_copy(lo._d, _d, n);
 		lo._norm();
 
 		g_copy(_d, &_d[n], size - n);
-		_reallocate(size - n);
+		_set_size(size - n);
 	}
 
 	gfloat to_float() const
