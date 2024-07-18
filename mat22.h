@@ -48,6 +48,23 @@ public:
 
 		return *this;
 	}
+
+	Mat22u & mul_right_gcf(const uint64_t n)
+	{
+		guint t(_a12.get_size() + 2);
+
+		_a11 *= n; _a21 *= n;
+
+		t = _a11; t += _a12; t += _a12;
+		_a11 *= 2 * n + 1; _a12 *= 5 * n + 2; _a12 += _a11;
+		_a11.swap(t);
+
+		t = _a21; t += _a22; t += _a22;
+		_a21 *= 2 * n + 1; _a22 *= 5 * n + 2; _a22 += _a21;
+		_a21.swap(t);
+
+		return *this;
+	}
 };
 
 class Mat22

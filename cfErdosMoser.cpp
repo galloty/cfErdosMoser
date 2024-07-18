@@ -35,6 +35,7 @@ private:
 	gfloat _q_j, _q_jm1;
 	uint64_t _q_j_mod, _q_jm1_mod;
 	uint64_t _j;
+	std::string _Nstr;
 	Factor _factor;
 	// { p : 3 is a primitive root modulo p } such that 6 * (5*7*17*19*29*31*43)^2 < 2^64
 	const std::vector<uint32_t> _P_pr3 = { 5, 7, 17, 19, 29, 31, 43 };
@@ -61,15 +62,10 @@ private:
 
 	void _gcf_extend(Mat22u & M, guint & d, const uint64_t n, const uint64_t size)
 	{
-		if (size == 32)
+		if (size == 64)
 		{
 			M.set_gcf(n);
-			Mat22u M_i;
-			for (uint64_t i = 1; i < size; ++i)
-			{
-				M_i.set_gcf(n + i);
-				M.mul_right(M_i);
-			}
+			for (uint64_t i = 1; i < size; ++i) M.mul_right_gcf(n + i);
 
 			d = 1;
 			for (uint64_t i = 0; i < size; ++i)
@@ -209,28 +205,33 @@ private:
 
 		const uint64_t g6 = q_j_mod % 6;
 
-		std::ostringstream ss;
-		ss << _N.to_string() << ", " << j << ", " << a_jp1.to_string() << ", " << q_j.to_string() << ", " << ((g6 == 1) ? "+" : "-") << "1";
+
+
+		std::ostringstream ss, ssr;
+		ss << "N = " << _Nstr << ", j = " << j << ", a_{j+1} = " << a_jp1.to_string() << ", q_j = " << q_j.to_string()
+			<< ", q_j mod 6 = " << ((g6 == 1) ? "+" : "-") << "1";
+		ssr << _Nstr << "\t" << j << "\t" << a_jp1.to_string() << "\t" << q_j.to_string() << "\t" << ((g6 == 1) ? "+" : "-") << "1";
 
 		bool cond_d = true;
 		for (const uint32_t p : _P_pr3)
 		{
 			const uint64_t r = q_j_mod % (p * p);
-			if ((r != 0) && (r % p == 0)) { cond_d = false; ss << ", " << p; break; }
+			if ((r != 0) && (r % p == 0)) { cond_d = false; ss << ", (d) p = " << p; ssr << "\t" << p; break; }
 		}
-		ss << std::endl;
-		pio::print(ss.str(), true);
+		ss << "." << std::endl; ssr << std::endl;
+		pio::print(ss.str(), ssr.str());
 
 		return cond_d;
 	}
 
 public:
-	void solve(const guint & N)
+	void solve(const guint & N, const std::string & Nstr, const bool verbose)
 	{
 		_heap.reset();
 
 		_N = N;
 		_cond_b = N; _cond_b *= 180; _cond_b -= 2;
+		_Nstr = Nstr;
 
 		_factor.init();
 
@@ -252,10 +253,10 @@ public:
 		_q_j_mod = 0; _q_jm1_mod = 1;
 		_q_j = gfloat(0, 0); _q_jm1 = gfloat(1, 0);
 
-		const std::string Nstr = N.to_string();
 		double time_gcf_extend = 0, time_gcf_mul = 0, time_gcf_div = 0, time_cf_reduce = 0, time_elapsed = 0, prev_time_elapsed = 0;
 		size_t M_min_size = 0, Mgcf_size = 0;	// divisor_size = 0, M_max_size = 0;
 		uint64_t j_prev = _j;
+		size_t str_size = 0;
 
 		bool found = false;
 		while (!found)
@@ -285,17 +286,32 @@ public:
 
 			if (found) found = condition_c();
 
-			if ((time_elapsed - prev_time_elapsed > 10) || found)
+			if ((time_elapsed - prev_time_elapsed > 1) || found)
 			{
 				prev_time_elapsed = time_elapsed;
+
 				std::ostringstream ss;
-				ss	<< "N = " << Nstr << ", n = " << n << " [" << nstep << "], j = " << _j << " (+" << _j - j_prev << "), "
-					<< "q_j = " << _q_j.to_string() << ", elapsed time: " << format_time(time_elapsed) << "." << std::endl;
+				ss	<< "N = " << Nstr << ", n = " << n << " [" << nstep << "], j = " << _j << " (+" << _j - j_prev << "), " << "q_j = " << _q_j.to_string();
+				if (!verbose) ss << ", memory usage: " << _heap.get_memory_usage();
+				ss << ", elapsed time: " << format_time(time_elapsed) << ".";
+
+				if (verbose)
+				{
+					ss << std::endl;
 					// << "M_max: " << M_max_size << ", M_min: " << M_min_size << ", Mgcf: " << Mgcf_size << ", divisor: " << divisor_size << ", "
-				ss	<< "    Memory usage: " << _heap.get_memory_info() << std::endl;
-				ss	<< "    CPU usage: " << std::setprecision(3)
-					<< "gcf_extend: " << time_gcf_extend * 100 / time_elapsed << "%, gcf_mul: " << time_gcf_mul * 100 / time_elapsed << "%, "
-					<< "gcf_div: " << time_gcf_div * 100 / time_elapsed << "%, cf_reduce: " << time_cf_reduce * 100 / time_elapsed << "%." << std::endl;
+					ss	<< "    Memory usage: " << _heap.get_memory_info() << std::endl;
+					ss	<< "    CPU usage: " << std::setprecision(3)
+						<< "gcf_extend: " << time_gcf_extend * 100 / time_elapsed << "%, gcf_mul: " << time_gcf_mul * 100 / time_elapsed << "%, "
+						<< "gcf_div: " << time_gcf_div * 100 / time_elapsed << "%, cf_reduce: " << time_cf_reduce * 100 / time_elapsed << "%." << std::endl;
+				}
+				else
+				{
+					const size_t s_size = ss.str().size();
+					for (size_t i = s_size; i < str_size; ++i) ss << " ";
+					str_size = s_size;
+					if (found) ss << std::endl; else ss << "\r";
+				}
+
 				pio::print(ss.str());
 				j_prev = _j;
 			}
@@ -326,11 +342,22 @@ int main()
 		Heap heap;
 		CF cf(heap);
 
+		const bool verbose = false;
+
 		guint N;
 		for (size_t d = 0; d < fN.size(); ++d)
 		{
-			N = 1; for (size_t i = 0; i < d; ++i) N *= fN[i];
-			cf.solve(N);
+			N = 1; uint32_t f_prev = 0; size_t e = 0;
+			std::ostringstream ss;
+			for (size_t i = 0; i < d; ++i)
+			{
+				const uint32_t f = fN[i];
+				N *= f;
+				if ((f_prev != 0) && (f != f_prev)) { ss << f_prev; if (e > 1) ss << "^" << e; ss << "*"; e = 0; }
+				f_prev = f; ++e;
+			}
+			if (e == 0) ss << "1"; else ss << f_prev; if (e > 1) ss << "^" << e;
+			cf.solve(N, ss.str(), verbose);
 		}
 
 		// Test all divisors of N_max
@@ -341,7 +368,7 @@ int main()
 					for (uint64_t n7 = 1; n7 <= 343; n7 *= 7) Nset.insert(n2 * n3 * n5 * n7);
 		Nset.erase(1);
 
-		for (const uint64_t n : Nset) { N = n; cf.solve(N); }
+		for (const uint64_t n : Nset) { N = n; cf.solve(N, N.to_string(), verbose); }
 	}
 	catch (const std::runtime_error & e)
 	{

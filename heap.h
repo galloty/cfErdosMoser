@@ -136,6 +136,14 @@ public:
 		return ss.str();
 	}
 
+	std::string	get_memory_usage() const
+	{
+		const size_t max_size = _max_size * sizeof(uint64_t), max_size_gmp = _max_size_gmp;
+		size_t size_divisor; std::string size_unit; get_unit(std::max(max_size, max_size_gmp), size_divisor, size_unit);
+		std::ostringstream ss; ss << max_size / size_divisor << " + " << max_size_gmp / size_divisor << " " << size_unit;
+		return ss.str();
+	}
+
 	void reset()
 	{
 		_alloc_count = 0; _realloc_count = 0; _free_count = 0; _block_count = 0;

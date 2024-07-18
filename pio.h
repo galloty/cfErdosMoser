@@ -28,7 +28,7 @@ public:
 	}
 
 private:
-	void _print(const std::string & str, const bool is_result) const
+	void _print(const std::string & str, const std::string & str_res) const
 	{
 		std::cout << str;
 		std::ofstream logfile("cflog.txt", std::ios::app);
@@ -37,17 +37,17 @@ private:
 			logfile << str;
 			logfile.close();
 		}
-		if (is_result)
+		if (!str_res.empty())
 		{
 			std::ofstream resfile("cfres.txt", std::ios::app);
 			if (resfile.is_open())
 			{
-				resfile << str;
+				resfile << str_res;
 				resfile.close();
 			}
 		}
 	}
 
 public:
-	static void print(const std::string & str, const bool is_result = false) { getInstance()._print(str, is_result); }
+	static void print(const std::string & str, const std::string & str_res = "") { getInstance()._print(str, str_res); }
 };
