@@ -12,6 +12,8 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <string>
 #include <sstream>
 #include <iomanip>
+#define _USE_MATH_DEFINES
+#include <cmath>
 
 // giant float
 class gfloat

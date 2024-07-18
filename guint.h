@@ -496,4 +496,10 @@ public:
 		delete[] cstr;
 		return str;
 	}
+
+	void from_string(const std::string & str)
+	{
+		* this = 0;
+		for (size_t i = 0, n = str.size(); i < n; ++i) { *this *= 10; *this += uint64_t(str[i] - '0');}
+	}
 };
