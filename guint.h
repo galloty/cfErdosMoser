@@ -16,6 +16,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "g_low_level.h"
 #include "gfloat.h"
 #include "heap.h"
+#include "checkpoint.h"
 
 // giant unsigned integer
 class guint
@@ -501,5 +502,20 @@ public:
 	{
 		* this = 0;
 		for (size_t i = 0, n = str.size(); i < n; ++i) { *this *= 10; *this += uint64_t(str[i] - '0');}
+	}
+
+	bool read(Checkpoint & checkpoint)
+	{
+		size_t size; if (!checkpoint.read(reinterpret_cast<char *>(&size), sizeof(size))) return false;
+		_set_size(size);
+		if (!checkpoint.read(reinterpret_cast<char *>(_d), _size * sizeof(uint64_t))) return false;
+		return true;
+	}
+
+	bool write(Checkpoint & checkpoint) const
+	{
+		if (!checkpoint.write(reinterpret_cast<const char *>(&_size), sizeof(_size))) return false;
+		if (!checkpoint.write(reinterpret_cast<const char *>(_d), _size * sizeof(uint64_t))) return false;
+		return true;
 	}
 };

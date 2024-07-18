@@ -13,6 +13,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "guint.h"
 #include "gfloat.h"
+#include "checkpoint.h"
 
 // giant integer
 class gint
@@ -97,5 +98,19 @@ public:
 	{
 		const std::string str_pos = _u.to_string();
 		return _is_positive ? str_pos : (std::string("-") + str_pos);
+	}
+
+	bool read(Checkpoint & checkpoint)
+	{
+		uint32_t is_positive; if (!checkpoint.read(reinterpret_cast<char *>(&is_positive), sizeof(is_positive))) return false;
+		_is_positive = (is_positive != 0);
+		return _u.read(checkpoint);
+	}
+
+	bool write(Checkpoint & checkpoint) const
+	{
+		const uint32_t is_positive = _is_positive ? 1 : 0;
+		if (!checkpoint.write(reinterpret_cast<const char *>(&is_positive), sizeof(is_positive))) return false;
+		return _u.write(checkpoint);
 	}
 };

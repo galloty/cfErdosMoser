@@ -42,8 +42,10 @@ public:
 	gfloat() {}
 	gfloat(const double mantissa, const size_t exponent) : _mantissa(mantissa), _exponent(exponent) {}
 	gfloat(const gfloat & rhs) : _mantissa(rhs._mantissa), _exponent(rhs._exponent) {}
-
 	virtual ~gfloat() {}
+
+	double get_mantissa() const { return _mantissa; }
+	size_t get_exponent() const { return _exponent; }
 
 	gfloat & operator=(const gfloat & rhs)
 	{

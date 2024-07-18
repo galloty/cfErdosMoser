@@ -10,18 +10,21 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <cstdint>
 #include <stdexcept>
 #include <iostream>
+#include <fstream>
 #include <sstream>
 #include <iomanip>
 #include <chrono>
 #include <vector>
+#include <sys/stat.h>
 
 #include "factor.h"
 #include "mod64.h"
+#include "checkpoint.h"
 #include "gfloat.h"
+#include "heap.h"
+#include "guint.h"
 #include "gint.h"
 #include "mat22.h"
-#include "heap.h"
-#include "pio.h"
 
 // See Yves Gallot, Pieter Moree, Wadim Zudilin,
 // The Erdős-Moser equation 1^k + 2^k + ... + (m−1)^k = m^k revisited using continued fractions,
@@ -32,9 +35,9 @@ class CF
 private:
 	Heap & _heap;
 	guint _N, _cond_b, _a_j;
+	uint64_t _j;
 	gfloat _q_j, _q_jm1;
 	uint64_t _q_j_mod, _q_jm1_mod;
-	uint64_t _j;
 	std::string _Nstr;
 	Factor _factor;
 	// { p : 3 is a primitive root modulo p } such that 6 * (5*7*17*19*29*31*43)^2 < 2^64
@@ -205,8 +208,6 @@ private:
 
 		const uint64_t g6 = q_j_mod % 6;
 
-
-
 		std::ostringstream ss, ssr;
 		ss << "N = " << _Nstr << ", j = " << j << ", a_{j+1} = " << a_jp1.to_string() << ", q_j = " << q_j.to_string()
 			<< ", q_j mod 6 = " << ((g6 == 1) ? "+" : "-") << "1";
@@ -219,9 +220,109 @@ private:
 			if ((r != 0) && (r % p == 0)) { cond_d = false; ss << ", (d) p = " << p; ssr << "\t" << p; break; }
 		}
 		ss << "." << std::endl; ssr << std::endl;
-		pio::print(ss.str(), ssr.str());
+		record(ss.str(), ssr.str());
 
 		return cond_d;
+	}
+
+	std::string checkpoint_filename() const { return std::string("cf_") + _N.to_string() + ".cpt"; }
+
+	int _read_checkpoint(const std::string & filename, uint64_t & n, uint64_t & nstep, Mat22 & M)
+	{
+		Checkpoint checkpoint(filename, "rb");
+		if (!checkpoint.exists()) return -1;
+
+		uint32_t version = 0;
+		if (!checkpoint.read(reinterpret_cast<char *>(&version), sizeof(version))) return -2;
+		if (version != 1) return -2;
+		if (!checkpoint.read(reinterpret_cast<char *>(&_j), sizeof(_j))) return -2;
+		double mantissa; size_t exponent;
+		if (!checkpoint.read(reinterpret_cast<char *>(&mantissa), sizeof(mantissa))) return -2;
+		if (!checkpoint.read(reinterpret_cast<char *>(&exponent), sizeof(exponent))) return -2;
+		_q_j = gfloat(mantissa, exponent);
+		if (!checkpoint.read(reinterpret_cast<char *>(&mantissa), sizeof(mantissa))) return -2;
+		if (!checkpoint.read(reinterpret_cast<char *>(&exponent), sizeof(exponent))) return -2;
+		_q_jm1 = gfloat(mantissa, exponent);
+		if (!checkpoint.read(reinterpret_cast<char *>(&_q_j_mod), sizeof(_q_j_mod))) return -2;
+		if (!checkpoint.read(reinterpret_cast<char *>(&_q_jm1_mod), sizeof(_q_jm1_mod))) return -2;
+		if (!checkpoint.read(reinterpret_cast<char *>(&n), sizeof(n))) return -2;
+		if (!checkpoint.read(reinterpret_cast<char *>(&nstep), sizeof(nstep))) return -2;
+		if (!M.read(checkpoint)) return -2;
+		if (!checkpoint.check_crc32()) return -2;
+		return 0;
+	}
+
+	bool read_checkpoint(uint64_t & n, uint64_t & nstep, Mat22 & M)
+	{
+		std::string cpt_file = checkpoint_filename();
+		int error = _read_checkpoint(cpt_file, n, nstep, M);
+		if (error < -1) std::cerr << "Error: " << cpt_file << " is an invalid checkpoint." << std::endl;
+		if (error < 0)
+		{
+ 			cpt_file += ".old";
+			error = _read_checkpoint(cpt_file, n, nstep, M);
+			if (error < -1) std::cerr << "Error: " << cpt_file << " is an invalid checkpoint." << std::endl;
+		}
+		return (error == 0);
+	}
+
+	void save_checkpoint(const uint64_t n, const uint64_t nstep, const Mat22 & M)
+	{
+		const std::string cpt_file = checkpoint_filename(), old_cpt_file = cpt_file + ".old", new_cpt_file = cpt_file + ".new";
+
+		{
+			Checkpoint checkpoint(new_cpt_file, "wb");
+			uint32_t version = 1;
+			if (!checkpoint.write(reinterpret_cast<const char *>(&version), sizeof(version))) return;
+			if (!checkpoint.write(reinterpret_cast<const char *>(&_j), sizeof(_j))) return;
+			const double q_j_mantissa = _q_j.get_mantissa(); const size_t q_j_exponent = _q_j.get_exponent();
+			if (!checkpoint.write(reinterpret_cast<const char *>(&q_j_mantissa), sizeof(q_j_mantissa))) return;
+			if (!checkpoint.write(reinterpret_cast<const char *>(&q_j_exponent), sizeof(q_j_exponent))) return;
+			const double _q_jm1_mantissa = _q_jm1.get_mantissa(); const size_t _q_jm1_exponent = _q_jm1.get_exponent();
+			if (!checkpoint.write(reinterpret_cast<const char *>(&_q_jm1_mantissa), sizeof(_q_jm1_mantissa))) return;
+			if (!checkpoint.write(reinterpret_cast<const char *>(&_q_jm1_exponent), sizeof(_q_jm1_exponent))) return;
+			if (!checkpoint.write(reinterpret_cast<const char *>(&_q_j_mod), sizeof(_q_j_mod))) return;
+			if (!checkpoint.write(reinterpret_cast<const char *>(&_q_jm1_mod), sizeof(_q_jm1_mod))) return;
+			if (!checkpoint.write(reinterpret_cast<const char *>(&n), sizeof(n))) return;
+			if (!checkpoint.write(reinterpret_cast<const char *>(&nstep), sizeof(nstep))) return;
+			if (!M.write(checkpoint)) return;
+			checkpoint.write_crc32();
+		}
+
+		std::remove(old_cpt_file.c_str());
+
+		struct stat s;
+		if ((stat(cpt_file.c_str(), &s) == 0) && (std::rename(cpt_file.c_str(), old_cpt_file.c_str()) != 0))	// file exists and cannot rename it
+		{
+			std::cerr << "Error: cannot save checkpoint." << std::endl;
+			return;
+		}
+
+		if (std::rename(new_cpt_file.c_str(), cpt_file.c_str()) != 0)
+		{
+			std::cerr << "Error: cannot save checkpoint." << std::endl;
+			return;
+		}
+	}
+
+	void record(const std::string & str, const std::string & str_res = "") const
+	{
+		std::cout << str;
+		std::ofstream logfile("cflog.txt", std::ios::app);
+		if (logfile.is_open())
+		{
+			logfile << str;
+			logfile.close();
+		}
+		if (!str_res.empty())
+		{
+			std::ofstream resfile("cfres.txt", std::ios::app);
+			if (resfile.is_open())
+			{
+				resfile << str_res;
+				resfile.close();
+			}
+		}
 	}
 
 public:
@@ -235,28 +336,41 @@ public:
 
 		_factor.init();
 
-		// j is the index of the convergent of the regular continued fraction.
-		_j = uint64_t(-1);
-
 		// n is the index of the convergent of the generalized continued fraction.
-		uint64_t n = 1, nstep = 256;
+		uint64_t n, nstep;
 
 		// Matrix M is the remainder of the nth convergent the generalized continued fraction of log(2) / 2N
 		// after j coefficients of the regular continued fraction retrieval using the Euclidean algorithm.
 		// j and n must be odd such that a_11/a21 < a12/a22
 		Mat22 M;
 
-		// p_0 = 0, p_1 = 1, q_0 = q_1 = 2N.
-		M.init_gcf(N);
+		const bool resume = read_checkpoint(n, nstep, M);
+		if (resume)
+		{
+			std::cout << "Resuming from a checkpoint." << std::endl;
+		}
+		else
+		{
+			// j is the index of the convergent of the regular continued fraction.
+			_j = uint64_t(-1);
 
-		// Denominator of the regular continued fraction: q_j and q_{j-1}.
-		_q_j_mod = 0; _q_jm1_mod = 1;
-		_q_j = gfloat(0, 0); _q_jm1 = gfloat(1, 0);
+			// Denominator of the regular continued fraction: q_j and q_{j-1}.
+			_q_j = gfloat(0, 0); _q_jm1 = gfloat(1, 0);
+			_q_j_mod = 0; _q_jm1_mod = 1;
 
-		double time_gcf_extend = 0, time_gcf_mul = 0, time_gcf_div = 0, time_cf_reduce = 0, time_elapsed = 0, prev_time_elapsed = 0;
+			n = 1; nstep = 256;
+
+			// p_0 = 0, p_1 = 1, q_0 = q_1 = 2N.
+			M.init_gcf(N);
+		}
+
+		double time_gcf_extend = 0, time_gcf_mul = 0, time_gcf_div = 0, time_cf_reduce = 0;
 		size_t M_min_size = 0, Mgcf_size = 0;	// divisor_size = 0, M_max_size = 0;
 		uint64_t j_prev = _j;
 		size_t str_size = 0;
+
+		const auto start_time = std::chrono::high_resolution_clock::now();
+		auto display_time = start_time, save_time = start_time;
 
 		bool found = false;
 		while (!found)
@@ -282,27 +396,32 @@ public:
 
 			if (Mgcf_size < M_min_size / 4) nstep *= 2;
 
-			time_elapsed = time_gcf_extend + time_gcf_mul + time_gcf_div + time_cf_reduce;
-
 			if (found) found = condition_c();
 
-			if ((time_elapsed - prev_time_elapsed > 1) || found)
+			const auto now = std::chrono::high_resolution_clock::now();
+
+			if (std::chrono::duration<double>(now - save_time).count() > 10) { save_time = now; save_checkpoint(n, nstep, M); }
+
+			if ((std::chrono::duration<double>(now - display_time).count() > 3600) || found)
 			{
-				prev_time_elapsed = time_elapsed;
+				display_time = now;
+				const double elapsed_time = std::chrono::duration<double>(now - start_time).count();
 
 				std::ostringstream ss;
 				ss	<< "N = " << Nstr << ", n = " << n << " [" << nstep << "], j = " << _j << " (+" << _j - j_prev << "), " << "q_j = " << _q_j.to_string();
 				if (!verbose) ss << ", memory usage: " << _heap.get_memory_usage();
-				ss << ", elapsed time: " << format_time(time_elapsed) << ".";
+				ss << ", elapsed time: " << format_time(elapsed_time) << ".";
 
 				if (verbose)
 				{
+					const double time_total = time_gcf_extend + time_gcf_mul + time_gcf_div + time_cf_reduce;
+
 					ss << std::endl;
 					// << "M_max: " << M_max_size << ", M_min: " << M_min_size << ", Mgcf: " << Mgcf_size << ", divisor: " << divisor_size << ", "
 					ss	<< "    Memory usage: " << _heap.get_memory_info() << std::endl;
 					ss	<< "    CPU usage: " << std::setprecision(3)
-						<< "gcf_extend: " << time_gcf_extend * 100 / time_elapsed << "%, gcf_mul: " << time_gcf_mul * 100 / time_elapsed << "%, "
-						<< "gcf_div: " << time_gcf_div * 100 / time_elapsed << "%, cf_reduce: " << time_cf_reduce * 100 / time_elapsed << "%." << std::endl;
+						<< "gcf_extend: " << time_gcf_extend * 100 / time_total << "%, gcf_mul: " << time_gcf_mul * 100 / time_total << "%, "
+						<< "gcf_div: " << time_gcf_div * 100 / time_total << "%, cf_reduce: " << time_cf_reduce * 100 / time_total << "%." << std::endl;
 				}
 				else
 				{
@@ -312,7 +431,7 @@ public:
 					if (found) ss << std::endl; else ss << "\r";
 				}
 
-				pio::print(ss.str());
+				record(ss.str());
 				j_prev = _j;
 			}
 

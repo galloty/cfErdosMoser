@@ -11,6 +11,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <stdexcept>
 
 #include "gint.h"
+#include "checkpoint.h"
 
 class Mat22u
 {
@@ -183,5 +184,23 @@ public:
 		const bool success = (coefficient2.cmp(t) == 0);
 		if (success) cf_mul(coefficient2); else cf_mul_revert(coefficient1);
 		return success;
+	}
+
+	bool read(Checkpoint & checkpoint)
+	{
+		if (!_a11.read(checkpoint)) return false;
+		if (!_a12.read(checkpoint)) return false;
+		if (!_a21.read(checkpoint)) return false;
+		if (!_a22.read(checkpoint)) return false;
+		return true;
+	}
+
+	bool write(Checkpoint & checkpoint) const
+	{
+		if (!_a11.write(checkpoint)) return false;
+		if (!_a12.write(checkpoint)) return false;
+		if (!_a21.write(checkpoint)) return false;
+		if (!_a22.write(checkpoint)) return false;
+		return true;
 	}
 };
