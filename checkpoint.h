@@ -25,7 +25,7 @@ private:
 	{
 		static uint32_t table[256];
 		static bool have_table = false;
-	
+
 		// This check is not thread safe; there is no mutex
 		if (!have_table)
 		{
@@ -56,18 +56,13 @@ private:
 		return ~crc;
 	}
 
-	void error(const std::string & str) const
-	{
-		std::cerr << "Error: file '" << _filename << "', " << str << "." << std::endl;
-	}
+	void error(const std::string & str) const { std::cerr << "Error: file '" << _filename << "', " << str << "." << std::endl; }
 
 public:
 	Checkpoint(const std::string & filename, const char * const mode) : _filename(filename), _file(std::fopen(filename.c_str(), mode)), _crc32(0) {}
 	virtual ~Checkpoint() { if (_file != nullptr) std::fclose(_file); }
 
 	bool exists() const { return (_file != nullptr); }
-
-	uint32_t crc32() const { return _crc32; }
 
 	bool read(char * const ptr, const size_t size)
 	{

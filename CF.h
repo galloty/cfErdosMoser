@@ -33,13 +33,16 @@ Please give feedback to the authors if improvement is realized. It is distribute
 class CF
 {
 private:
-	Heap & _heap;
+	Heap * _heap;
+	bool _verbose;
 	guint _N, _cond_b, _a_j;
 	uint64_t _j;
 	gfloat _q_j, _q_jm1;
 	uint64_t _q_j_mod, _q_jm1_mod;
 	std::string _Nstr;
 	Factor _factor;
+	size_t _str_size;
+	volatile bool _quit = false;
 	// { p : 3 is a primitive root modulo p } such that 6 * (5*7*17*19*29*31*43)^2 < 2^64
 	const std::vector<uint32_t> _P_pr3 = { 5, 7, 17, 19, 29, 31, 43 };
 	static const uint64_t _mod_q = 6 * uint64_t(5*7*17*19*29*31*43) * (5*7*17*19*29*31*43);
@@ -48,9 +51,23 @@ private:
 	static const int _mod_q_e = 60;
 	static const uint64_t _mod_q_f = (-_mod_q) % _mod_q;	// 2^64 mod mod_q
 
+private:
+	struct deleter { void operator()(const CF * const p) { delete p; } };
+
 public:
-	CF(Heap & heap) : _heap(heap) {}
+	CF() : _heap(nullptr), _verbose(false), _str_size(0) {}
 	virtual ~CF() {}
+
+	static CF & get_instance()
+	{
+		static std::unique_ptr<CF, deleter> p_instance(new CF());
+		return *p_instance;
+	}
+
+	void quit() { _quit = true; }
+
+	void set_heap(Heap & heap) { _heap = &heap; }
+	void set_verbose(const bool verbose) { _verbose = verbose; }
 
 private:
 	static std::string format_time(const double time)
@@ -198,7 +215,7 @@ private:
 		return ((g6 == 1) || (g6 == 5));	// (c) gcd(q_{j , 6) = 1
 	}
 
-	bool condition_d() const
+	bool condition_d()
 	{
 		// a step backward
 		const uint64_t j = _j - 1;
@@ -209,9 +226,10 @@ private:
 		const uint64_t g6 = q_j_mod % 6;
 
 		std::ostringstream ss, ssr;
-		ss << "N = " << _Nstr << ", j = " << j << ", a_{j+1} = " << a_jp1.to_string() << ", q_j = " << q_j.to_string()
+		const std::string a_jp1_str = a_jp1.to_string(), q_j_str = q_j.to_string(10);
+		ss << "N = " << _Nstr << ", j = " << j << ", a_{j+1} = " << a_jp1_str << ", q_j = " << q_j_str
 			<< ", q_j mod 6 = " << ((g6 == 1) ? "+" : "-") << "1";
-		ssr << _Nstr << "\t" << j << "\t" << a_jp1.to_string() << "\t" << q_j.to_string() << "\t" << ((g6 == 1) ? "+" : "-") << "1";
+		ssr << _Nstr << "\t" << j << "\t" << a_jp1_str << "\t" << q_j_str << "\t" << ((g6 == 1) ? "+" : "-") << "1";
 
 		bool cond_d = true;
 		for (const uint32_t p : _P_pr3)
@@ -220,7 +238,7 @@ private:
 			if ((r != 0) && (r % p == 0)) { cond_d = false; ss << ", (d) p = " << p; ssr << "\t" << p; break; }
 		}
 		ss << "." << std::endl; ssr << std::endl;
-		record(ss.str(), ssr.str());
+		print(ss.str()); record(ssr.str());
 
 		return cond_d;
 	}
@@ -305,8 +323,15 @@ private:
 		}
 	}
 
-	void record(const std::string & str, const std::string & str_res = "") const
+	void print(const std::string & str)
 	{
+		if (!_verbose)
+		{
+			std::string str_clear(_str_size, ' ');
+			std::cout << str_clear << '\r';
+			_str_size = str.size();
+		}
+
 		std::cout << str;
 		std::ofstream logfile("cflog.txt", std::ios::app);
 		if (logfile.is_open())
@@ -314,21 +339,22 @@ private:
 			logfile << str;
 			logfile.close();
 		}
-		if (!str_res.empty())
+	}
+
+	static void record(const std::string & str)
+	{
+		std::ofstream resfile("cfres.txt", std::ios::app);
+		if (resfile.is_open())
 		{
-			std::ofstream resfile("cfres.txt", std::ios::app);
-			if (resfile.is_open())
-			{
-				resfile << str_res;
-				resfile.close();
-			}
+			resfile << str;
+			resfile.close();
 		}
 	}
 
 public:
-	void solve(const guint & N, const std::string & Nstr, const bool verbose)
+	void solve(const guint & N, const std::string & Nstr)
 	{
-		_heap.reset();
+		if (_heap != nullptr) _heap->reset();
 
 		_N = N;
 		_cond_b = N; _cond_b *= 180; _cond_b -= 2;
@@ -347,10 +373,13 @@ public:
 		const bool resume = read_checkpoint(n, nstep, M);
 		if (resume)
 		{
-			std::cout << "Resuming from a checkpoint." << std::endl;
+			std::cout << "N = " << Nstr << ", resuming from a checkpoint." << std::endl;
 		}
 		else
 		{
+			std::ostringstream ss; ss << "N = " << Nstr << "." << std::endl;
+			print(ss.str());
+
 			// j is the index of the convergent of the regular continued fraction.
 			_j = uint64_t(-1);
 
@@ -367,7 +396,6 @@ public:
 		double time_gcf_extend = 0, time_gcf_mul = 0, time_gcf_div = 0, time_cf_reduce = 0;
 		size_t M_min_size = 0, Mgcf_size = 0;	// divisor_size = 0, M_max_size = 0;
 		uint64_t j_prev = _j;
-		size_t str_size = 0;
 
 		const auto start_time = std::chrono::high_resolution_clock::now();
 		auto display_time = start_time, save_time = start_time;
@@ -400,45 +428,45 @@ public:
 
 			const auto now = std::chrono::high_resolution_clock::now();
 
-			if (std::chrono::duration<double>(now - save_time).count() > 10) { save_time = now; save_checkpoint(n, nstep, M); }
-
-			if ((std::chrono::duration<double>(now - display_time).count() > 3600) || found)
+			if ((std::chrono::duration<double>(now - display_time).count() > 1) || found)
 			{
 				display_time = now;
 				const double elapsed_time = std::chrono::duration<double>(now - start_time).count();
 
 				std::ostringstream ss;
-				ss	<< "N = " << Nstr << ", n = " << n << " [" << nstep << "], j = " << _j << " (+" << _j - j_prev << "), " << "q_j = " << _q_j.to_string();
-				if (!verbose) ss << ", memory usage: " << _heap.get_memory_usage();
-				ss << ", elapsed time: " << format_time(elapsed_time) << ".";
+				ss	<< format_time(elapsed_time) << ": n = " << n << " [" << nstep << "], "
+					<< "j = " << _j << " (+" << _j - j_prev << "), " << "q_j = " << _q_j.to_string();
+				if (!_verbose && (_heap != nullptr)) ss << ", mem usage: " << _heap->get_memory_usage();
+				ss << ".";
 
-				if (verbose)
+				if (_verbose)
 				{
 					const double time_total = time_gcf_extend + time_gcf_mul + time_gcf_div + time_cf_reduce;
 
 					ss << std::endl;
 					// << "M_max: " << M_max_size << ", M_min: " << M_min_size << ", Mgcf: " << Mgcf_size << ", divisor: " << divisor_size << ", "
-					ss	<< "    Memory usage: " << _heap.get_memory_info() << std::endl;
+					if (_heap != nullptr) ss << "    Memory usage: " << _heap->get_memory_info() << std::endl;
 					ss	<< "    CPU usage: " << std::setprecision(3)
 						<< "gcf_extend: " << time_gcf_extend * 100 / time_total << "%, gcf_mul: " << time_gcf_mul * 100 / time_total << "%, "
 						<< "gcf_div: " << time_gcf_div * 100 / time_total << "%, cf_reduce: " << time_cf_reduce * 100 / time_total << "%." << std::endl;
 				}
 				else
 				{
-					const size_t s_size = ss.str().size();
-					for (size_t i = s_size; i < str_size; ++i) ss << " ";
-					str_size = s_size;
 					if (found) ss << std::endl; else ss << "\r";
 				}
 
-				record(ss.str());
+				print(ss.str());
 				j_prev = _j;
 			}
 
 			if (found) found = condition_d();
+
+			if (!found && std::chrono::duration<double>(now - save_time).count() > 3600) { save_time = now; save_checkpoint(n, nstep, M); }
+
+			if (_quit) { std::cout << std::endl; save_checkpoint(n, nstep, M); break; }
 		}
 
 		_N = 0; _cond_b = 0; _a_j = 0; M.set_zero();
-		std::cout << "Memory size: " << _heap.get_memory_size() << "." << std::endl;
+		std::cout << "Memory size: " << _heap->get_memory_size() << "." << std::endl;
 	}
 };

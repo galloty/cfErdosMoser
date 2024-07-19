@@ -9,74 +9,112 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <stdexcept>
 #include <iostream>
 #include <sstream>
+#include <memory>
 #include <vector>
 #include <set>
+
+#if defined(_WIN32)
+#include <Windows.h>
+#else
+#include <signal.h>
+#endif
 
 #include "heap.h"
 #include "CF.h"
 
-static std::string header()
+class application
 {
-	const char * const sysver =
+private:
+	struct deleter { void operator()(const application * const p) { delete p; } };
+
+	static void quit(int) { CF::get_instance().quit(); }
+
+#if defined(_WIN32)
+	static BOOL WINAPI HandlerRoutine(DWORD) { quit(1); return TRUE; }
+#endif
+
+public:
+	application()
+	{
+#if defined(_WIN32)
+		SetConsoleCtrlHandler(HandlerRoutine, TRUE);
+#else
+		signal(SIGTERM, quit);
+		signal(SIGINT, quit);
+#endif
+	}
+
+	virtual ~application() {}
+
+	static application & get_instance()
+	{
+		static std::unique_ptr<application, deleter> p_instance(new application());
+		return *p_instance;
+	}
+
+private:
+	static std::string header()
+	{
+		const char * const sysver =
 #if defined(_WIN64)
-		"win64";
+			"win64";
 #elif defined(_WIN32)
-		"win32";
+			"win32";
 #elif defined(__linux__)
 #ifdef __x86_64
-		"linux64";
+			"linux64";
 #else
-		"linux32";
+			"linux32";
 #endif
 #elif defined(__APPLE__)
-		"macOS";
+			"macOS";
 #else
-		"unknown";
+			"unknown";
 #endif
 
-	std::ostringstream ssc;
+		std::ostringstream ssc;
 #if defined(__GNUC__)
-	ssc << " gcc-" << __GNUC__ << "." << __GNUC_MINOR__ << "." << __GNUC_PATCHLEVEL__;
+		ssc << " gcc-" << __GNUC__ << "." << __GNUC_MINOR__ << "." << __GNUC_PATCHLEVEL__;
 #elif defined(__clang__)
-	ssc << " clang-" << __clang_major__ << "." << __clang_minor__ << "." << __clang_patchlevel__;
+		ssc << " clang-" << __clang_major__ << "." << __clang_minor__ << "." << __clang_patchlevel__;
 #endif
 
-	std::ostringstream ss;
-	ss << "cfErdosMoser 24.07.0 " << sysver << ssc.str() << std::endl;
-	ss << "Copyright (c) 2024, Yves Gallot" << std::endl;
-	ss << "cfErdosMoser is free source code, under the MIT license." << std::endl << std::endl;
-	return ss.str();
-}
+		std::ostringstream ss;
+		ss << "cfErdosMoser 24.07.0 " << sysver << ssc.str() << std::endl;
+		ss << "Copyright (c) 2024, Yves Gallot" << std::endl;
+		ss << "cfErdosMoser is free source code, under the MIT license." << std::endl << std::endl;
+		return ss.str();
+	}
 
-static std::string usage()
-{
-	std::ostringstream ss;
-	ss << "Usage: cfErdosMoser <N> [-v]" << std::endl;
-	ss << "  N: compute the regular continued fraction of log(2)/(2N)," << std::endl;
-	ss << "     if N = 0 then check N = 1, 2, 2^2, ..., 2^8, 2^8*3, ..." << std::endl;
-	ss << " -v: verbose mode." << std::endl;
-	return ss.str();
-}
-
-int main(int argc, char * argv[])
-{
-	std::cout << header();
-	if (argc < 2) std::cout << usage() << std::endl;
-
-	const std::string arg1((argc > 1) ? argv[1] : "6912"), arg2((argc > 2) ? argv[2] : "");
-
-	try
+	static std::string usage()
 	{
+		std::ostringstream ss;
+		ss << "Usage: cfErdosMoser <N> [-v]" << std::endl;
+		ss << "  N: compute the regular continued fraction of log(2)/(2N)," << std::endl;
+		ss << "     if N = 0 then check N = 1, 2, 2^2, ..., 2^8, 2^8*3, ..." << std::endl;
+		ss << " -v: verbose mode." << std::endl;
+		return ss.str();
+	}
+
+public:
+	void run(int argc, char * argv[])
+	{
+		std::cout << header();
+		if (argc < 2) std::cout << usage() << std::endl;
+
+		const std::string arg1((argc > 1) ? argv[1] : "6912"), arg2((argc > 2) ? argv[2] : "");
+		const bool verbose = (arg2 == "-v");
+
 		if (sizeof(mp_limb_t) < 8) throw std::runtime_error("32-bit computing is not supported");
 
 		Heap heap;
-		CF cf(heap);
+		CF & cf = CF::get_instance();
+		cf.set_heap(heap); cf.set_verbose(verbose);
 
-		const bool verbose = (arg2 == "-v");
 		guint N; N.from_string(arg1);
 		if (!N.is_zero())
 		{
-			cf.solve(N, arg1, verbose);
+			cf.solve(N, arg1);
 		}
 		else
 		{
@@ -101,7 +139,7 @@ int main(int argc, char * argv[])
 					f_prev = f; ++e;
 				}
 				if (e == 0) ss << "1"; else ss << f_prev; if (e > 1) ss << "^" << e;
-				cf.solve(N, ss.str(), verbose);
+				cf.solve(N, ss.str());
 			}
 
 			// Test all divisors of N_max
@@ -112,8 +150,17 @@ int main(int argc, char * argv[])
 						for (uint64_t n7 = 1; n7 <= 343; n7 *= 7) Nset.insert(n2 * n3 * n5 * n7);
 			Nset.erase(1);
 
-			for (const uint64_t n : Nset) { N = n; cf.solve(N, N.to_string(), verbose); }
+			for (const uint64_t n : Nset) { N = n; cf.solve(N, N.to_string()); }
 		}
+	}
+};
+
+int main(int argc, char * argv[])
+{
+	try
+	{
+		application & app = application::get_instance();
+		app.run(argc, argv);
 	}
 	catch (const std::runtime_error & e)
 	{

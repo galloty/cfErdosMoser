@@ -75,7 +75,7 @@ public:
 	gfloat operator-(const gfloat & rhs) const { gfloat r = *this; r -= rhs; return r; }
 	gfloat operator*(const gfloat & rhs) const { gfloat r = *this; r *= rhs; return r; }
 
-	std::string to_string() const
+	std::string to_string(const int precision = 5) const
 	{
 		if (_mantissa == 0) return "0";
 
@@ -88,7 +88,7 @@ public:
 		while (mantissa10 >= 10) { mantissa10 *= 0.1; ++exponent10; }
 
 		std::ostringstream ss;
-		ss << std::setprecision(10) << sgn * mantissa10 << "e+" << exponent10;
+		ss << std::setprecision(precision) << sgn * mantissa10 << "e+" << exponent10;
 		return ss.str();
 	}
 };
