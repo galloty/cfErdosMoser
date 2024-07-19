@@ -64,7 +64,11 @@ public:
 		return *p_instance;
 	}
 
-	void quit() { _quit = true; }
+	void quit()
+	{
+		_quit = true;
+		std::cout << std::endl << "^C caught...";
+	}
 
 	void set_heap(Heap & heap) { _heap = &heap; }
 	void set_verbose(const bool verbose) { _verbose = verbose; }
@@ -245,7 +249,7 @@ private:
 
 	std::string checkpoint_filename() const { return std::string("cf_") + _N.to_string() + ".cpt"; }
 
-	int _read_checkpoint(const std::string & filename, uint64_t & n, uint64_t & nstep, Mat22 & M)
+	int _read_checkpoint(const std::string & filename, double & time, uint64_t & n, uint64_t & nstep, Mat22 & M)
 	{
 		Checkpoint checkpoint(filename, "rb");
 		if (!checkpoint.exists()) return -1;
@@ -263,6 +267,7 @@ private:
 		_q_jm1 = gfloat(mantissa, exponent);
 		if (!checkpoint.read(reinterpret_cast<char *>(&_q_j_mod), sizeof(_q_j_mod))) return -2;
 		if (!checkpoint.read(reinterpret_cast<char *>(&_q_jm1_mod), sizeof(_q_jm1_mod))) return -2;
+		if (!checkpoint.read(reinterpret_cast<char *>(&time), sizeof(time))) return -2;
 		if (!checkpoint.read(reinterpret_cast<char *>(&n), sizeof(n))) return -2;
 		if (!checkpoint.read(reinterpret_cast<char *>(&nstep), sizeof(nstep))) return -2;
 		if (!M.read(checkpoint)) return -2;
@@ -270,21 +275,21 @@ private:
 		return 0;
 	}
 
-	bool read_checkpoint(uint64_t & n, uint64_t & nstep, Mat22 & M)
+	bool read_checkpoint(double & time, uint64_t & n, uint64_t & nstep, Mat22 & M)
 	{
 		std::string cpt_file = checkpoint_filename();
-		int error = _read_checkpoint(cpt_file, n, nstep, M);
+		int error = _read_checkpoint(cpt_file, time, n, nstep, M);
 		if (error < -1) std::cerr << "Error: " << cpt_file << " is an invalid checkpoint." << std::endl;
 		if (error < 0)
 		{
  			cpt_file += ".old";
-			error = _read_checkpoint(cpt_file, n, nstep, M);
+			error = _read_checkpoint(cpt_file, time, n, nstep, M);
 			if (error < -1) std::cerr << "Error: " << cpt_file << " is an invalid checkpoint." << std::endl;
 		}
 		return (error == 0);
 	}
 
-	void save_checkpoint(const uint64_t n, const uint64_t nstep, const Mat22 & M)
+	void save_checkpoint(const double time, const uint64_t n, const uint64_t nstep, const Mat22 & M)
 	{
 		const std::string cpt_file = checkpoint_filename(), old_cpt_file = cpt_file + ".old", new_cpt_file = cpt_file + ".new";
 
@@ -301,6 +306,7 @@ private:
 			if (!checkpoint.write(reinterpret_cast<const char *>(&_q_jm1_exponent), sizeof(_q_jm1_exponent))) return;
 			if (!checkpoint.write(reinterpret_cast<const char *>(&_q_j_mod), sizeof(_q_j_mod))) return;
 			if (!checkpoint.write(reinterpret_cast<const char *>(&_q_jm1_mod), sizeof(_q_jm1_mod))) return;
+			if (!checkpoint.write(reinterpret_cast<const char *>(&time), sizeof(time))) return;
 			if (!checkpoint.write(reinterpret_cast<const char *>(&n), sizeof(n))) return;
 			if (!checkpoint.write(reinterpret_cast<const char *>(&nstep), sizeof(nstep))) return;
 			if (!M.write(checkpoint)) return;
@@ -370,7 +376,8 @@ public:
 		// j and n must be odd such that a_11/a21 < a12/a22
 		Mat22 M;
 
-		const bool resume = read_checkpoint(n, nstep, M);
+		double t0;
+		const bool resume = read_checkpoint(t0, n, nstep, M);
 		if (resume)
 		{
 			std::cout << "N = " << Nstr << ", resuming from a checkpoint." << std::endl;
@@ -379,6 +386,8 @@ public:
 		{
 			std::ostringstream ss; ss << "N = " << Nstr << "." << std::endl;
 			print(ss.str());
+
+			t0 = 0;
 
 			// j is the index of the convergent of the regular continued fraction.
 			_j = uint64_t(-1);
@@ -398,11 +407,24 @@ public:
 		uint64_t j_prev = _j;
 
 		const auto start_time = std::chrono::high_resolution_clock::now();
-		auto display_time = start_time, save_time = start_time;
+		auto now = start_time, display_time = start_time, save_time = start_time;
 
 		bool found = false;
 		while (!found)
 		{
+			if (_quit)
+			{
+				std::cout << " writing checkpoint..." << std::endl;
+				save_checkpoint(t0 + std::chrono::duration<double>(now - start_time).count(), n, nstep, M);
+				break;
+			}
+
+			if (std::chrono::duration<double>(now - save_time).count() > 3600)
+			{
+				save_time = now;
+				save_checkpoint(t0 + std::chrono::duration<double>(now - start_time).count(), n, nstep, M);
+			}
+
 			{
 				// Matrix form of the generalized continued fraction: p_{n-2} / q_{n-2} and p_{n-1} / q_{n-1}.
 				// Compute nstep terms of the matrix and its divisor starting at n.
@@ -426,14 +448,14 @@ public:
 
 			if (found) found = condition_c();
 
-			const auto now = std::chrono::high_resolution_clock::now();
+			now = std::chrono::high_resolution_clock::now();
 
 			if ((std::chrono::duration<double>(now - display_time).count() > 1) || found)
 			{
 				display_time = now;
-				const double elapsed_time = std::chrono::duration<double>(now - start_time).count();
 
 				std::ostringstream ss;
+				const double elapsed_time = t0 + std::chrono::duration<double>(now - start_time).count();
 				ss	<< format_time(elapsed_time) << ": n = " << n << " [" << nstep << "], "
 					<< "j = " << _j << " (+" << _j - j_prev << "), " << "q_j = " << _q_j.to_string();
 				if (!_verbose && (_heap != nullptr)) ss << ", mem usage: " << _heap->get_memory_usage();
@@ -460,10 +482,6 @@ public:
 			}
 
 			if (found) found = condition_d();
-
-			if (!found && std::chrono::duration<double>(now - save_time).count() > 3600) { save_time = now; save_checkpoint(n, nstep, M); }
-
-			if (_quit) { std::cout << std::endl; save_checkpoint(n, nstep, M); break; }
 		}
 
 		_N = 0; _cond_b = 0; _a_j = 0; M.set_zero();
