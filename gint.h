@@ -38,6 +38,8 @@ public:
 	gint & operator=(const uint64_t n) { _u = n; _is_positive = true; return *this; }
 	gint & operator=(const gint & rhs) { if (&rhs != this) { _u = rhs._u; _is_positive = rhs._is_positive; } return *this; }
 
+	void clear() { _u.clear(); }
+
 	gint & swap(gint & rhs) { _u.swap(rhs._u); std::swap(_is_positive, rhs._is_positive); return *this; }
 
 	gint & operator+=(const uint64_t n) { if (_is_positive) _u += n; else _is_positive = !_u.sub(n); return *this; }

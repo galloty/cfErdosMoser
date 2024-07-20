@@ -124,10 +124,17 @@ private:
 		return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
 	}
 
-	static double gcf_div(Mat22 & M, guint & divisor)
+	static double gcf_div_invert(guint & d_inv, const guint & d)
 	{
 		const auto start = std::chrono::high_resolution_clock::now();
-		M.div(divisor);
+		d_inv.div_invert(d);
+		return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
+	}
+
+	static double gcf_div_exact(Mat22 & M, const guint & d, const guint & d_inv, const int right_shift)
+	{
+		const auto start = std::chrono::high_resolution_clock::now();
+		M.div_exact(d, d_inv, right_shift);
 		return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
 	}
 
@@ -402,7 +409,7 @@ public:
 			M.init_gcf(N);
 		}
 
-		double time_gcf_extend = 0, time_gcf_mul = 0, time_gcf_div = 0, time_cf_reduce = 0;
+		double time_gcf_extend = 0, time_gcf_mul = 0, time_gcf_div_invert = 0, time_gcf_div_exact = 0, time_cf_reduce = 0;
 		size_t M_min_size = 0, Mgcf_size = 0;	// divisor_size = 0, M_max_size = 0;
 		uint64_t j_prev = _j;
 
@@ -434,7 +441,12 @@ public:
 				// divisor_size = divisor.get_byte_count();
 
 				time_gcf_mul += gcf_mul(M, Mgcf);
-				time_gcf_div += gcf_div(M, divisor);
+				Mgcf.clear();
+
+				int right_shift; divisor.div_norm(right_shift);
+				guint divisor_inv(divisor.get_size() + 1);
+				time_gcf_div_invert += gcf_div_invert(divisor_inv, divisor);
+				time_gcf_div_exact += gcf_div_exact(M, divisor, divisor_inv, right_shift);
 			}
 			n += nstep;
 
@@ -463,14 +475,15 @@ public:
 
 				if (_verbose)
 				{
-					const double time_total = time_gcf_extend + time_gcf_mul + time_gcf_div + time_cf_reduce;
+					const double time_total = time_gcf_extend + time_gcf_mul + time_gcf_div_invert + time_gcf_div_exact + time_cf_reduce;
 
 					ss << std::endl;
 					// << "M_max: " << M_max_size << ", M_min: " << M_min_size << ", Mgcf: " << Mgcf_size << ", divisor: " << divisor_size << ", "
 					if (_heap != nullptr) ss << "    Memory usage: " << _heap->get_memory_info() << std::endl;
 					ss	<< "    CPU usage: " << std::setprecision(3)
 						<< "gcf_extend: " << time_gcf_extend * 100 / time_total << "%, gcf_mul: " << time_gcf_mul * 100 / time_total << "%, "
-						<< "gcf_div: " << time_gcf_div * 100 / time_total << "%, cf_reduce: " << time_cf_reduce * 100 / time_total << "%." << std::endl;
+						<< "gcf_div_invert: " << time_gcf_div_invert * 100 / time_total << "%, gcf_div_exact: " << time_gcf_div_exact * 100 / time_total
+						<< "%, cf_reduce: " << time_cf_reduce * 100 / time_total << "%." << std::endl;
 				}
 				else
 				{

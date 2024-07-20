@@ -26,6 +26,28 @@ private:
 	static size_t _max_size, _max_block_size, _max_block_count, _max_size_gmp, _max_block_size_gmp;
 	static std::queue<uint64_t *> _small_block_queue;
 
+	static uint64_t * _alloc(const size_t size)
+	{
+		++_alloc_count;
+		uint64_t * const ptr = static_cast<uint64_t *>(std::malloc(size * sizeof(uint64_t)));
+		if (ptr == nullptr) throw std::runtime_error("malloc failed");
+		return ptr;
+	}
+
+	static uint64_t * _realloc(uint64_t * const ptr, const size_t size)
+	{
+		++_realloc_count;
+		uint64_t * const new_ptr = static_cast<uint64_t *>(realloc(static_cast<void *>(ptr), size * sizeof(uint64_t)));
+		if (new_ptr == nullptr) throw std::runtime_error("realloc failed");
+		return new_ptr;
+	}
+
+	static void _free(uint64_t * const ptr)
+	{
+		++_free_count;
+		free(static_cast<void *>(ptr));
+	}
+
 public:
 	static size_t get_min_size(const size_t size) { return (size / Heap::min_size + 1) * Heap::min_size; }
 
@@ -40,35 +62,38 @@ public:
 
 		if ((size == min_size) && !_small_block_queue.empty())
 		{
-			uint64_t * const ptr = _small_block_queue.front();
-			_small_block_queue.pop();
+			uint64_t * const ptr = _small_block_queue.front(); _small_block_queue.pop();
 			return ptr;
 		}
 
-		++_alloc_count;
-		uint64_t * const ptr = static_cast<uint64_t *>(std::malloc(size * sizeof(uint64_t)));
-		if (ptr == nullptr) throw std::runtime_error("malloc failed");
-		return ptr;
+		return _alloc(size);
 	}
 
 	static uint64_t * realloc_function(uint64_t * const ptr, const size_t old_size, const size_t new_size)
 	{
+		if (old_size == new_size) return ptr;
+
 		_size += new_size - old_size;
 		_max_size = std::max(_max_size, _size);
 		_max_block_size = std::max(_max_block_size, new_size);
 
-		++_realloc_count;
+		if ((new_size == min_size) && !_small_block_queue.empty())
+		{
+			uint64_t * const new_ptr = _small_block_queue.front(); _small_block_queue.pop();
+			for (size_t i = 0; i < min_size; ++i) new_ptr[i] = ptr[i];
+			_free(ptr);
+			return new_ptr;
+		}
+
 		if (old_size == min_size)
 		{
-			uint64_t * const new_ptr = static_cast<uint64_t *>(malloc(new_size * sizeof(uint64_t)));
-			for (size_t i = 0; i < old_size; ++i) new_ptr[i] = ptr[i];
+			uint64_t * const new_ptr = _alloc(new_size);
+			for (size_t i = 0; i < min_size; ++i) new_ptr[i] = ptr[i];
 			_small_block_queue.push(ptr);
 			return new_ptr;
 		}
 
-		uint64_t * const new_ptr = static_cast<uint64_t *>(realloc(ptr, new_size * sizeof(uint64_t)));
-		if (new_ptr == nullptr) throw std::runtime_error("realloc failed");
-		return new_ptr;
+		return _realloc(ptr, new_size);
 	}
 
 	static void free_function(uint64_t * const ptr, const size_t size)
@@ -77,11 +102,7 @@ public:
 		--_block_count;
 
 		if (size == min_size) _small_block_queue.push(ptr);
-		else
-		{
-			++_free_count;
-			free(static_cast<void *>(ptr));
-		}
+		else _free(ptr);
 	}
 
 	static void * allocate_function_gmp(size_t size)

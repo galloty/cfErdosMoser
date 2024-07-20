@@ -30,6 +30,8 @@ public:
 
 	size_t get_byte_count() const { return _a11.get_byte_count() + _a12.get_byte_count() + _a21.get_byte_count() + _a22.get_byte_count(); }
 
+	void clear() { _a11.clear(); _a12.clear(); _a21.clear(); _a22.clear();}
+
 	void set_gcf(const uint64_t n)
 	{
 		_a11 = n; _a12 = 2 * n + 1; _a12 *= n;
@@ -89,6 +91,8 @@ public:
 	size_t get_min_size() const { return std::min(std::min(_a11.get_size(), _a12.get_size()), std::min(_a21.get_size(), _a22.get_size())); }
 	size_t get_byte_count() const { return _a11.get_byte_count() + _a12.get_byte_count() + _a21.get_byte_count() + _a22.get_byte_count(); }
 
+	void clear() { _a11.clear(); _a12.clear(); _a21.clear(); _a22.clear();}
+
 	Mat22 & swap(Mat22 & rhs)
 	{
 		_a11.swap(rhs._a11); _a12.swap(rhs._a12);
@@ -96,10 +100,8 @@ public:
 		return *this;
 	}
 
-	Mat22 & div(guint & d)
+	Mat22 & div_exact(const guint & d, const guint & d_inv, const int right_shift)
 	{
-		int right_shift; d.div_norm(right_shift);
-		guint d_inv(d.get_size() + 1); d_inv.div_invert(d);
 		_a11.div_exact(d, d_inv, right_shift); _a12.div_exact(d, d_inv, right_shift);
 		_a21.div_exact(d, d_inv, right_shift); _a22.div_exact(d, d_inv, right_shift);
 		return *this;

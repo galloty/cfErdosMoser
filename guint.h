@@ -36,11 +36,8 @@ private:
 	void _realloc(const size_t size)
 	{
 		const size_t alloc_size = Heap::get_min_size(size);
-		if (alloc_size != _alloc_size)
-		{
-			_d = Heap::realloc_function(_d, _alloc_size, alloc_size);
-			_alloc_size = alloc_size;
-		}
+		_d = Heap::realloc_function(_d, _alloc_size, alloc_size);
+		_alloc_size = alloc_size;
 	}
 
 	void _free() { Heap::free_function(_d, _alloc_size); }
@@ -105,6 +102,8 @@ public:
 
 	guint & operator=(const uint64_t n) { _set_size((n == 0) ? 0 : 1); _d[0] = n; return *this; }
 	guint & operator=(const guint & rhs) { if (&rhs != this) { _set_size(rhs._size); g_copy(_d, rhs._d, rhs._size); } return *this; }
+
+	void clear() { _set_size(0); _shrink(); }
 
 	guint & swap(guint & rhs) { std::swap(_alloc_size, rhs._alloc_size); std::swap(_size, rhs._size); std::swap(_d, rhs._d); return *this; }
 
@@ -246,7 +245,7 @@ public:
 		const size_t new_size = xsize + ysize;
 		_set_size(new_size);
 		uint64_t * const d = _d;
-		g_mul(d, x._d, xsize, y._d, ysize);
+		if (xsize >= ysize) g_mul(d, x._d, xsize, y._d, ysize); else g_mul(d, y._d, ysize, x._d, xsize);
 		if (d[new_size - 1] == 0) _set_size(new_size - 1);
 		return *this;
 	}
@@ -282,7 +281,7 @@ public:
 	{
 		const size_t size = _size;
 		if (size <= n) *this = 0;
-		else
+		else if (n != 0)
 		{
 			g_copy(_d, &_d[n], size - n);
 			_set_size(size - n);
@@ -342,19 +341,33 @@ public:
 		if (dsize == 0) throw std::runtime_error("divide by zero");
 
 		guint x(dsize + 1);
-		g_zero(x._d, dsize - 1);
-		x._d[dsize - 1] = (~size_t(0) / (d._d[dsize - 1] >> 32)) << 32; x._d[dsize] = 1;
-		x._size = dsize + 1;
-
 		guint t1(2 * dsize + 8), t2(2 * dsize + 8);
+
+		// start with one digit for d
+		x._d[0] = (~size_t(0) / (d._d[dsize - 1] >> 32)) << 32; x._d[1] = 1;
+		x._size = 2;
+
+		for (size_t s = 1; true; s *= 2)
+		{
+			g_copy(_d, &d._d[dsize - s], s);
+			_size = s;
+
+			t1.sqr(x); t1.rshift(s - 1); t2.mul(t1, *this); t2.rshift(s + 1);
+
+			x += x; x -= t2;
+
+			if (s >= dsize / 2) { x.lshift(dsize - s); break; }
+			x.lshift(s);	// increase precision
+		}
+
 		do
 		{
 			*this = x;
 			t1.sqr(x); t1.rshift(dsize - 1); t2.mul(t1, d); t2.rshift(dsize + 1);
 			x += x; x -= t2;
 		} while (cmp(x) != 0);
-		*this -= 1;
 
+		*this -= 1;
 		return *this;
 	}
 
