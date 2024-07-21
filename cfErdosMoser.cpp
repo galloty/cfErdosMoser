@@ -114,7 +114,7 @@ public:
 		guint N; N.from_string(arg1);
 		if (!N.is_zero())
 		{
-			cf.solve(N, arg1);
+			cf.solve(N);
 		}
 		else
 		{
@@ -129,17 +129,8 @@ public:
 
 			for (size_t d = 0; d < fN.size(); ++d)
 			{
-				N = 1; uint32_t f_prev = 0; size_t e = 0;
-				std::ostringstream ss;
-				for (size_t i = 0; i < d; ++i)
-				{
-					const uint32_t f = fN[i];
-					N *= f;
-					if ((f_prev != 0) && (f != f_prev)) { ss << f_prev; if (e > 1) ss << "^" << e; ss << "*"; e = 0; }
-					f_prev = f; ++e;
-				}
-				if (e == 0) ss << "1"; else ss << f_prev; if (e > 1) ss << "^" << e;
-				cf.solve(N, ss.str());
+				N = 1; for (size_t i = 0; i < d; ++i) N *= fN[i];
+				cf.solve(N);
 			}
 
 			// Test all divisors of N_max
@@ -150,7 +141,7 @@ public:
 						for (uint64_t n7 = 1; n7 <= 343; n7 *= 7) Nset.insert(n2 * n3 * n5 * n7);
 			Nset.erase(1);
 
-			for (const uint64_t n : Nset) { N = n; cf.solve(N, N.to_string()); }
+			for (const uint64_t n : Nset) { N = n; cf.solve(N); }
 		}
 	}
 };

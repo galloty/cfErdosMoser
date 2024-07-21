@@ -13,10 +13,8 @@ Please give feedback to the authors if improvement is realized. It is distribute
 // #define GMP_MPN	true
 
 #ifdef GMP_MPN
-
 // Low-level functions are implemented using GMP. On Windows, mpn has limit of 2^(31 + 6) bits (41 billion digits).
 #include <gmp.h>
-
 #else
 
 #include "mod64.h"
@@ -66,8 +64,6 @@ inline uint64_t _mod_62(const __uint128_t a, const uint64_t p, const uint64_t p_
 }
 
 #endif
-
-#include <gmp.h>	// TODO remove
 
 inline void g_zero(uint64_t * const x, const size_t size)
 {
@@ -160,14 +156,46 @@ inline uint64_t g_mod_1(const uint64_t * const x, const size_t size, const uint6
 	(void)n_inv; (void)e; (void)f;	// remove compiler warning: unused parameter
 	return (uint64_t)mpn_mod_1(mp_srcptr(x), mp_size_t(size), mp_limb_t(n));
 #else
-	uint64_t r = 0;
-	for (size_t i = 0, j = size - 1; i < size; ++i, --j)
+	uint64_t r = _mod_62(x[size - 1], n, n_inv, e);
+	for (size_t i = 1, j = size - 2; i < size; ++i, --j)
 	{
 		// Compute r * (2^64 mod n) rather than r * 2^64 such that t < n^2
 		const __uint128_t t = r * __uint128_t(f) + x[j];
 		r = _mod_62(t, n, n_inv, e);
 	}
+	return r;
+#endif
+}
 
+// size > 0
+inline uint64_t g_mod_1(const uint64_t * const x, const size_t size, const uint64_t n)
+{
+#ifdef GMP_MPN
+	return (uint64_t)mpn_mod_1(mp_srcptr(x), mp_size_t(size), mp_limb_t(n));
+#else
+	uint64_t r = uint64_t(x[size - 1] % n);
+	for (size_t i = 1, j = size - 2; i < size; ++i, --j)
+	{
+		const __uint128_t t = (__uint128_t(r) << 64) | x[j];
+		r = uint64_t(t % n);
+	}
+	return r;
+#endif
+}
+
+// size > 0
+inline uint64_t g_div_rem_1(uint64_t * const x, const size_t size, const uint64_t n)
+{
+#ifdef GMP_MPN
+	return (uint64_t)mpn_divrem_1(mp_ptr(x), 0, mp_srcptr(x), mp_size_t(size), mp_limb_t(n));
+#else
+	const uint64_t t = x[size - 1];
+	uint64_t r = uint64_t(t % n); x[size - 1] = t / n;
+	for (size_t i = 1, j = size - 2; i < size; ++i, --j)
+	{
+		const __uint128_t t = (__uint128_t(r) << 64) | x[j];
+		r = uint64_t(t % n); x[j] = uint64_t(t / n);
+	}
 	return r;
 #endif
 }
@@ -196,6 +224,8 @@ inline void g_sub(uint64_t * const z, const uint64_t * const x, const size_t x_s
 	for (size_t i = y_size; i < x_size; ++i) z[i] = _subb(x[i], 0, borrow);
 #endif
 }
+
+#include <gmp.h>	// TODO remove
 
 // x_size >= y_size > 0
 inline void g_mul(uint64_t * const z, const uint64_t * const x, const size_t x_size, const uint64_t * const y, const size_t y_size)

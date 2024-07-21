@@ -84,10 +84,14 @@ private:
 
 				// r = x - *this * y
 				r.mul(*this, y);
-				if (r.sub(x)) std::cout << "Warning: _div" << std::endl;	// if x > r then sub returns x - r
+				if (r.sub(x))	// if x > r then sub returns x - r
+				{
+					if (r._size != 0) throw std::runtime_error("_div failed");
+				}
 
 				size_t h = 0;
-				while (r.cmp(y) >= 0) { r -= y; *this += 1; ++h; if (h > 1) std::cout << "Warning: _div" << std::endl; }
+				while (r.cmp(y) >= 0) { r -= y; *this += 1; ++h; }
+				if (h > 1) std::cout << "Warning: _div" << std::endl;
 			}
 		}
 	}
@@ -172,8 +176,22 @@ public:
 	uint64_t mod(const uint64_t n, const uint64_t n_inv, const int n_e, const uint64_t n_f) const
 	{
 		if (n == 0) throw std::runtime_error("divide by zero");
-		if (_size == 0) return 0;
-		return g_mod_1(_d, _size, n, n_inv, n_e, n_f);
+		return (_size == 0) ? 0 : g_mod_1(_d, _size, n, n_inv, n_e, n_f);
+	}
+
+	uint64_t operator%(const uint64_t n) const
+	{
+		if (n == 0) throw std::runtime_error("divide by zero");
+		return (_size == 0) ? 0 : g_mod_1(_d, _size, n);
+	}
+
+	guint & operator/=(const uint64_t n)
+	{
+		if (n == 0) throw std::runtime_error("divide by zero");
+		if (_size == 0) return *this;
+		g_div_rem_1(_d, _size, n);
+		_norm();
+		return *this;
 	}
 
 	guint & operator+=(const guint & rhs)

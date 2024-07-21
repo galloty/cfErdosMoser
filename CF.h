@@ -84,6 +84,24 @@ private:
 		return ss.str();
 	}
 
+	std::string factor(const guint & N)
+	{
+		if (N.cmp(1) == 0) return "1";
+		guint r = N; bool first = true;
+		std::ostringstream ss;
+		for (uint32_t d = 2; d < 1000; ++d)
+		{
+			if (r % d == 0)
+			{
+				size_t e = 0; do { r /= d; ++e; } while (r % d == 0);
+				if (first) first = false; else ss << "*";
+				ss << d; if (e > 1) ss << "^" << e;
+			}
+			if (r.cmp(1) == 0) break;
+		}
+		return ss.str();
+	}
+
 	void _gcf_extend(Mat22u & M, guint & d, const uint64_t n, const uint64_t size)
 	{
 		if (size == 64)
@@ -365,13 +383,13 @@ private:
 	}
 
 public:
-	void solve(const guint & N, const std::string & Nstr)
+	void solve(const guint & N)
 	{
 		if (_heap != nullptr) _heap->reset();
 
 		_N = N;
 		_cond_b = N; _cond_b *= 180; _cond_b -= 2;
-		_Nstr = Nstr;
+		_Nstr = factor(N);
 
 		_factor.init();
 
@@ -387,11 +405,11 @@ public:
 		const bool resume = read_checkpoint(t0, n, nstep, M);
 		if (resume)
 		{
-			std::cout << "N = " << Nstr << ", resuming from a checkpoint." << std::endl;
+			std::cout << "N = " << N.to_string() << " = " << _Nstr << ", resuming from a checkpoint." << std::endl;
 		}
 		else
 		{
-			std::ostringstream ss; ss << "N = " << Nstr << "." << std::endl;
+			std::ostringstream ss; ss << "N = " << N.to_string() << " = " << _Nstr << "." << std::endl;
 			print(ss.str());
 
 			t0 = 0;
