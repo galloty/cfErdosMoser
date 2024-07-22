@@ -259,11 +259,34 @@ public:
 	guint & mul(const guint & x, const guint & y)	// *this != x, *this != y
 	{
 		const size_t xsize = x._size, ysize = y._size;
+		if (ysize > xsize) { mul(y, x); return *this; }
 		if ((xsize == 0) || (ysize == 0)) { *this = 0; return *this; }
 		const size_t new_size = xsize + ysize;
 		_set_size(new_size);
+
+		if (ysize < 16) g_mul(_d, x._d, xsize, y._d, ysize);
+		else
+		{
+			const size_t n = xsize / ysize, n_r = xsize % ysize;	// n >= 1
+			guint t(2 * ysize), c(ysize);
+
+			g_zero(c._d, ysize);
+			for (size_t i = 0; i < n; ++i)
+			{
+				g_mul(t._d, y._d, ysize, &x._d[i * ysize], ysize);
+				const uint64_t carry = g_add(&_d[i * ysize], t._d, ysize, c._d, ysize);
+				g_copy(c._d, &t._d[ysize], ysize);
+				g_add_1(c._d, ysize, carry);
+			}
+			if (n_r > 0)
+			{
+				g_mul(t._d, y._d, ysize, &x._d[n * ysize], n_r);
+				g_add(&_d[n * ysize], t._d, ysize + n_r, c._d, ysize);
+			}
+			else g_copy(&_d[n * ysize], c._d, ysize);
+		}
+
 		uint64_t * const d = _d;
-		if (xsize >= ysize) g_mul(d, x._d, xsize, y._d, ysize); else g_mul(d, y._d, ysize, x._d, xsize);
 		if (d[new_size - 1] == 0) _set_size(new_size - 1);
 		return *this;
 	}
@@ -398,12 +421,12 @@ public:
 		if (size < dsize) { q = 0; r = *this; return; }
 
 		const size_t n = size / dsize, n_r = size % dsize;	// n >= 1
-		r = 0, q = 0;
 		guint q_j(2 * dsize), t(dsize + 1);
 
 		q_j._set_size(n_r);
 		g_copy(q_j._d, &_d[n * dsize], n_r);
 
+		r._set_size(dsize);
 		t._div(r, q_j, d, d_inv);
 		q._set_size(n * dsize + t._size);
 		g_copy(&q._d[n * dsize], t._d, t._size);
