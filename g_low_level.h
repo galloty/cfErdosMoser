@@ -10,6 +10,8 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <cstdint>
 #include <immintrin.h>
 
+#include "fastmul.h"
+
 // #define GMP_MPN	true
 
 #ifdef GMP_MPN
@@ -36,6 +38,13 @@ inline uint64_t _subb(const uint64_t x, const uint64_t y, uint64_t & borrow)
 inline uint64_t _mulc(const uint64_t x, const uint64_t y, uint64_t & carry)
 {
 	const __uint128_t t = x * __uint128_t(y) + carry;
+	carry = uint64_t(t >> 64);
+	return uint64_t(t);
+}
+
+inline uint64_t _madc(const uint64_t x, const uint64_t y, const uint64_t z, uint64_t & carry)
+{
+	const __uint128_t t = z + x * __uint128_t(y) + carry;
 	carry = uint64_t(t >> 64);
 	return uint64_t(t);
 }
@@ -225,18 +234,54 @@ inline void g_sub(uint64_t * const z, const uint64_t * const x, const size_t x_s
 #endif
 }
 
-#include <gmp.h>	// TODO remove
-
-// x_size >= y_size > 0
-inline void g_mul(uint64_t * const z, const uint64_t * const x, const size_t x_size, const uint64_t * const y, const size_t y_size)
+inline void smul(uint64_t * const z, const uint64_t * const x, const size_t x_size, const uint64_t * const y, const size_t y_size)
 {
-	mpn_mul(mp_ptr(z), mp_srcptr(x), mp_size_t(x_size), mp_srcptr(y), mp_size_t(y_size));
+	g_zero(z, y_size);
+	for (size_t i = 0; i < x_size; ++i)
+	{
+		uint64_t carry = 0;
+		for (size_t j = 0; j < y_size; ++j)
+		{
+			z[i + j] = _madc(x[i], y[j], z[i + j], carry);
+		}
+		z[i + y_size] = carry;
+	}
 }
 
-// size > 0
+// x_size >= y_size > 0, z_size = x_size + y_size
+inline void g_mul(uint64_t * const z, const uint64_t * const x, const size_t x_size, const uint64_t * const y, const size_t y_size)
+{
+#ifdef GMP_MPN
+	mpn_mul(mp_ptr(z), mp_srcptr(x), mp_size_t(x_size), mp_srcptr(y), mp_size_t(y_size));
+#else
+	if (y_size == 1)
+	{
+		g_copy(z, x, x_size);
+		const uint64_t carry = g_mul_1(z, x_size, y[0]);
+		z[x_size] = carry;
+		return;
+	}
+
+	if (y_size < 16) smul(z, x, x_size, y, y_size);
+	else fmul(z, x, x_size, y, y_size);
+
+	// static double max_ratio = 1;
+	// const double ratio = x_size / double(y_size);
+	// if (ratio > max_ratio)
+	// {
+	// 	max_ratio = ratio; std::cout << ratio << std::endl;
+	// }
+#endif
+}
+
+// size > 0, z_size = 2 * x_size
 inline void g_sqr(uint64_t * const z, const uint64_t * const x, const size_t size)
 {
+#ifdef GMP_MPN
 	mpn_sqr(mp_ptr(z), mp_srcptr(x), mp_size_t(size));
+#else
+	g_mul(z, x, size, x, size);
+#endif
 }
 
 inline void g_get_str(char * const str, const uint64_t * const x, const size_t size)
