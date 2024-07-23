@@ -34,3 +34,52 @@ public:
 		return uint64_t((a * __uint128_t(b)) % _n);
 	}
 };
+
+class Zp
+{
+private:
+	static const uint64_t _p = (((uint64_t(1) << 32) - 1) << 32) + 1;	// 2^64 - 2^32 + 1
+	static const uint64_t _primroot = 7;
+	uint64_t _n;
+
+public:
+	Zp() {}
+	explicit Zp(const uint64_t n) : _n(n) {}
+
+	uint64_t get() const { return _n; }
+
+	Zp operator-() const { return Zp((_n != 0) ? _p - _n : 0); }
+
+	Zp & operator+=(const Zp & rhs) { const uint64_t c = (_n >= _p - rhs._n) ? _p : 0; _n += rhs._n - c; return *this; }
+	Zp & operator-=(const Zp & rhs) { const uint64_t c = (_n < rhs._n) ? _p : 0; _n -= rhs._n - c; return *this; }
+	Zp operator+(const Zp & rhs) const { Zp r = *this; r += rhs; return r; }
+	Zp operator-(const Zp & rhs) const { Zp r = *this; r -= rhs; return r; }
+
+	Zp & operator*=(const Zp & rhs)
+	{
+		const __uint128_t t = _n * __uint128_t(rhs._n);
+		const uint64_t lo = uint64_t(t), hi = uint64_t(t >> 64);
+		// hi.hi * 2^96 + hi.lo * 2^64 + lo = lo + hi.lo * 2^32 - (hi.hi + hi.lo)
+		*this = Zp(lo) + Zp(hi << 32) - Zp((hi >> 32) + uint32_t(hi));
+		return *this;
+	}
+	Zp operator*(const Zp & rhs) const { Zp r = *this; r *= rhs; return r; }
+
+	Zp pow(const uint64_t e) const
+	{
+		if (e == 0) return Zp(1);
+
+		Zp r = Zp(1), y = *this;
+		for (uint64_t i = e; i != 1; i /= 2)
+		{
+			if (i % 2 != 0) r *= y;
+			y *= y;
+		}
+		r *= y;
+
+		return r;
+	}
+
+	static Zp reciprocal(const uint64_t n) { return -Zp((_p - 1) / n); }
+	static const Zp primroot_n(const uint64_t n) { return Zp(_primroot).pow((_p - 1) / n); }
+};

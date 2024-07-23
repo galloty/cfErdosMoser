@@ -19,13 +19,12 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <signal.h>
 #endif
 
-#include "heap.h"
 #include "CF.h"
 
-class application
+class Application
 {
 private:
-	struct deleter { void operator()(const application * const p) { delete p; } };
+	struct deleter { void operator()(const Application * const p) { delete p; } };
 
 	static void quit(int) { CF::get_instance().quit(); }
 
@@ -34,7 +33,7 @@ private:
 #endif
 
 public:
-	application()
+	Application()
 	{
 #if defined(_WIN32)
 		SetConsoleCtrlHandler(HandlerRoutine, TRUE);
@@ -44,11 +43,11 @@ public:
 #endif
 	}
 
-	virtual ~application() {}
+	virtual ~Application() {}
 
-	static application & get_instance()
+	static Application & get_instance()
 	{
-		static std::unique_ptr<application, deleter> p_instance(new application());
+		static std::unique_ptr<Application, deleter> p_instance(new Application());
 		return *p_instance;
 	}
 
@@ -102,14 +101,11 @@ public:
 		std::cout << header();
 		if (argc < 2) std::cout << usage() << std::endl;
 
-		const std::string arg1((argc > 1) ? argv[1] : "6912"), arg2((argc > 2) ? argv[2] : "");
-		const bool verbose = (arg2 == "-v");
+		const std::string arg1((argc > 1) ? argv[1] : "6912"), arg2((argc > 2) ? argv[2] : "");	// 2304, 6912
+		const bool verbose = true;	//(arg2 == "-v");
 
-		if (sizeof(mp_limb_t) < 8) throw std::runtime_error("32-bit computing is not supported");
-
-		Heap heap;
 		CF & cf = CF::get_instance();
-		cf.set_heap(heap); cf.set_verbose(verbose);
+		cf.set_verbose(verbose);
 
 		guint N; N.from_string(arg1);
 		if (!N.is_zero())
@@ -150,7 +146,7 @@ int main(int argc, char * argv[])
 {
 	try
 	{
-		application & app = application::get_instance();
+		Application & app = Application::get_instance();
 		app.run(argc, argv);
 	}
 	catch (const std::runtime_error & e)

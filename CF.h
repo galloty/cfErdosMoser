@@ -33,7 +33,6 @@ Please give feedback to the authors if improvement is realized. It is distribute
 class CF
 {
 private:
-	Heap * _heap;
 	bool _verbose;
 	guint _N, _cond_b, _a_j;
 	uint64_t _j;
@@ -55,7 +54,7 @@ private:
 	struct deleter { void operator()(const CF * const p) { delete p; } };
 
 public:
-	CF() : _heap(nullptr), _verbose(false), _str_size(0) {}
+	CF() : _verbose(false), _str_size(0) {}
 	virtual ~CF() {}
 
 	static CF & get_instance()
@@ -70,7 +69,6 @@ public:
 		std::cout << std::endl << "^C caught...";
 	}
 
-	void set_heap(Heap & heap) { _heap = &heap; }
 	void set_verbose(const bool verbose) { _verbose = verbose; }
 
 private:
@@ -385,7 +383,7 @@ private:
 public:
 	void solve(const guint & N)
 	{
-		if (_heap != nullptr) _heap->reset();
+		Heap & heap = Heap::get_instance();
 
 		_N = N;
 		_cond_b = N; _cond_b *= 180; _cond_b -= 2;
@@ -450,31 +448,38 @@ public:
 				save_checkpoint(t0 + std::chrono::duration<double>(now - start_time).count(), n, nstep, M);
 			}
 
+// const double ref = M.get_byte_count() / 4;
 			{
 				// Matrix form of the generalized continued fraction: p_{n-2} / q_{n-2} and p_{n-1} / q_{n-1}.
 				// Compute nstep terms of the matrix and its divisor starting at n.
 				Mat22u Mgcf; guint divisor;
 				time_gcf_extend += gcf_extend(Mgcf, divisor, n, nstep);
 				Mgcf_size = Mgcf.get_byte_count();
+// std::cout << "M: 4x 1.0" << std::endl;
+// std::cout << "Mgcf: 4x " << (Mgcf.get_byte_count() / 4) / ref << std::endl;
+// std::cout << "Divisor: " << divisor.get_byte_count() / ref<< std::endl;
 				// divisor_size = divisor.get_byte_count();
 
 				time_gcf_mul += gcf_mul(M, Mgcf);
 				Mgcf.clear();
+// std::cout << "M_mul: 4x " << (M.get_byte_count() / 4) / ref << std::endl;
 
 				int right_shift; divisor.div_norm(right_shift);
 				guint divisor_inv(divisor.get_size() + 1);
 				time_gcf_div_invert += gcf_div_invert(divisor_inv, divisor);
 				time_gcf_div_exact += gcf_div_exact(M, divisor, divisor_inv, right_shift);
+// std::cout << "M_div: 4x " << (M.get_byte_count() / 4) / ref << std::endl;
 			}
 			n += nstep;
 
 			// M_max_size = M.get_byte_count();
 
 			time_cf_reduce += cf_reduce(M, found);
+// std::cout << "M_red: 4x " << (M.get_byte_count() / 4) / ref << std::endl;
 
 			M_min_size = M.get_byte_count();
 
-			if (Mgcf_size < M_min_size / 4) nstep *= 2;
+			if (Mgcf_size < M_min_size / 3) nstep *= 2;
 
 			if (found) found = condition_c();
 
@@ -488,7 +493,7 @@ public:
 				const double elapsed_time = t0 + std::chrono::duration<double>(now - start_time).count();
 				ss	<< format_time(elapsed_time) << ": n = " << n << " [" << nstep << "], "
 					<< "j = " << _j << " (+" << _j - j_prev << "), " << "q_j = " << _q_j.to_string();
-				if (!_verbose && (_heap != nullptr)) ss << ", mem usage: " << _heap->get_memory_usage();
+				if (!_verbose) ss << ", mem usage: " << heap.get_memory_usage();
 				ss << ".";
 
 				if (_verbose)
@@ -497,7 +502,7 @@ public:
 
 					ss << std::endl;
 					// << "M_max: " << M_max_size << ", M_min: " << M_min_size << ", Mgcf: " << Mgcf_size << ", divisor: " << divisor_size << ", "
-					if (_heap != nullptr) ss << "    Memory usage: " << _heap->get_memory_info() << std::endl;
+					ss << "    Memory usage: " << heap.get_memory_info() << std::endl;
 					ss	<< "    CPU usage: " << std::setprecision(3)
 						<< "gcf_extend: " << time_gcf_extend * 100 / time_total << "%, gcf_mul: " << time_gcf_mul * 100 / time_total << "%, "
 						<< "gcf_div_invert: " << time_gcf_div_invert * 100 / time_total << "%, gcf_div_exact: " << time_gcf_div_exact * 100 / time_total
@@ -515,7 +520,8 @@ public:
 			if (found) found = condition_d();
 		}
 
-		_N = 0; _cond_b = 0; _a_j = 0; M.set_zero();
-		std::cout << "Memory size: " << _heap->get_memory_size() << "." << std::endl;
+		_N.clear(); _cond_b.clear(); _a_j.clear(); M.clear();
+		FastMul::get_instance().clear(); heap.reset();
+		if (_verbose) std::cout << "Memory size: " << heap.get_memory_size() << "." << std::endl;
 	}
 };

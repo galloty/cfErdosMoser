@@ -30,17 +30,17 @@ private:
 	void _alloc(const size_t size)
 	{
 		_alloc_size = Heap::get_min_size(size);
-		_d = Heap::alloc_function(_alloc_size);
+		_d = Heap::get_instance().alloc(_alloc_size);
 	}
 
 	void _realloc(const size_t size)
 	{
 		const size_t alloc_size = Heap::get_min_size(size);
-		_d = Heap::realloc_function(_d, _alloc_size, alloc_size);
+		_d = Heap::get_instance().realloc(_d, _alloc_size, alloc_size);
 		_alloc_size = alloc_size;
 	}
 
-	void _free() { Heap::free_function(_d, _alloc_size); }
+	void _free() { Heap::get_instance().free(_d, _alloc_size); }
 
 	void _set_size(const size_t size) { _size = size; if (size > _alloc_size) _realloc(size); }
 	void _shrink() { _realloc(_size); }

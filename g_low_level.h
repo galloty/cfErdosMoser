@@ -12,7 +12,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "fastmul.h"
 
-// #define GMP_MPN	true
+// #define GMP_MPN	true	// Must be 64-bit GMP
 
 #ifdef GMP_MPN
 // Low-level functions are implemented using GMP. On Windows, mpn has limit of 2^(31 + 6) bits (41 billion digits).
@@ -263,7 +263,7 @@ inline void g_mul(uint64_t * const z, const uint64_t * const x, const size_t x_s
 	}
 
 	if (y_size < 16) smul(z, x, x_size, y, y_size);
-	else fmul(z, x, x_size, y, y_size);
+	else FastMul::get_instance().fmul(z, x, x_size, y, y_size);
 
 	// static double max_ratio = 1;
 	// const double ratio = x_size / double(y_size);
