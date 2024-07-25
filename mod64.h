@@ -65,6 +65,13 @@ public:
 	}
 	Zp operator*(const Zp & rhs) const { Zp r = *this; r *= rhs; return r; }
 
+	Zp mul_i() const
+	{
+		const __uint128_t t = __uint128_t(_n) << 48;	// i = 2^48
+		const uint64_t lo = uint64_t(t), hi = uint64_t(t >> 64);
+		return Zp(lo) + Zp(hi << 32) - Zp((hi >> 32) + uint32_t(hi));
+	}
+
 	Zp pow(const uint64_t e) const
 	{
 		if (e == 0) return Zp(1);
@@ -79,6 +86,8 @@ public:
 
 		return r;
 	}
+
+	Zp invert() const { return pow(_p - 2); }
 
 	static Zp reciprocal(const uint64_t n) { return -Zp((_p - 1) / n); }
 	static const Zp primroot_n(const uint64_t n) { return Zp(_primroot).pow((_p - 1) / n); }

@@ -477,10 +477,6 @@ public:
 			time_cf_reduce += cf_reduce(M, found);
 // std::cout << "M_red: 4x " << (M.get_byte_count() / 4) / ref << std::endl;
 
-			M_min_size = M.get_byte_count();
-
-			if (Mgcf_size < M_min_size / 3) nstep *= 2;
-
 			if (found) found = condition_c();
 
 			now = std::chrono::high_resolution_clock::now();
@@ -518,6 +514,9 @@ public:
 			}
 
 			if (found) found = condition_d();
+
+			M_min_size = M.get_byte_count();
+			if (Mgcf_size < M_min_size / 3) nstep *= 2;
 		}
 
 		_N.clear(); _cond_b.clear(); _a_j.clear(); M.clear();
