@@ -46,8 +46,9 @@ private:
 	Zp & _mod_p(const __uint128_t t)
 	{
 		const uint64_t lo = uint64_t(t), hi = uint64_t(t >> 64);
-		// hi.hi * 2^96 + hi.lo * 2^64 + lo = lo + hi.lo * 2^32 - (hi.hi + hi.lo)
-		*this = Zp().set(lo) + Zp(hi << 32) - Zp((hi >> 32) + uint32_t(hi));
+		// hi.hi * 2^96 + hi.lo * 2^64 + lo = lo + hi.lo * 2^32 - hi.lo - hi.hi
+		// hi.lo * 2^32 - hi.lo <= (2^32 - 1)^2 < p
+		*this = Zp().set(lo) + Zp((hi << 32) - uint32_t(hi)) - Zp(hi >> 32);
 		return *this;
 	}
 

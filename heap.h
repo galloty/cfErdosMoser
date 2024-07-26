@@ -172,7 +172,7 @@ public:
 		else _free(ptr);
 	}
 
-	Zp * allocate_fmul(size_t size)
+	Zp * alloc_fmul(const size_t size)
 	{
 		_size_fmul += size;
 		Zp * const ptr = static_cast<Zp *>(std::malloc(size * sizeof(Zp)));
@@ -180,5 +180,5 @@ public:
 		return ptr;
 	}
 
-	void free_fmul(Zp *ptr, size_t size) { _size_fmul -= size; std::free(static_cast<void *>(ptr)); }
+	void free_fmul(Zp * const ptr, const size_t size) { _size_fmul -= size; std::free(static_cast<void *>(ptr)); }
 };
