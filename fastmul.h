@@ -18,6 +18,7 @@ class FastMul
 private:
 	size_t _n;
 	Zp * _w;
+	Zp * _wi;
 	Zp * _x;
 	Zp * _y;
 
@@ -25,7 +26,7 @@ private:
 	struct deleter { void operator()(const FastMul * const p) { delete p; } };
 
 public:
-	FastMul() : _n(0), _w(nullptr), _x(nullptr), _y(nullptr) {}
+	FastMul() : _n(0), _w(nullptr), _wi(nullptr), _x(nullptr), _y(nullptr) {}
 	virtual ~FastMul() {}
 
 	static FastMul & get_instance()
@@ -35,6 +36,13 @@ public:
 	}
 
 private:
+	static size_t bitrev(const size_t i, const size_t n)
+	{
+		size_t r = 0;
+		for (size_t k = n, j = i; k > 1; k /= 2, j /= 2) r = (2 * r) | (j % 2);
+		return r;
+	}
+
 	void check_size(const size_t n)
 	{
 		// Base = 2^16. We have (2^16 - 1)^2 * 2^32 < 2^64 - 2^32 + 1
@@ -44,23 +52,25 @@ private:
 		if (n > _n)
 		{
 			Heap & heap = Heap::get_instance();
-			if (_n != 0) { heap.free_fmul(_w, _n); heap.free_fmul(_x, _n); heap.free_fmul(_y, _n); }
+			if (_n != 0) { heap.free_fmul(_w, _n); heap.free_fmul(_wi, _n); heap.free_fmul(_x, _n); heap.free_fmul(_y, _n); }
 
 			_n = n;
-			_w = heap.allocate_fmul(n); _x = heap.allocate_fmul(n); _y = heap.allocate_fmul(n);
+			_w = heap.allocate_fmul(n / 2); _wi = heap.allocate_fmul(n / 2); _x = heap.allocate_fmul(n); _y = heap.allocate_fmul(n);
 
 			Zp * const w = _w;
-			for (size_t m = 2; m <= n / 4; m *= 2)
+			Zp * const wi = _wi;
+			const Zp r = Zp::primroot_n(n), ri = r.invert();
+			Zp t = Zp(1), ti = Zp(1);
+			for (size_t i = 0; i < n / 2; ++i)
 			{
-				const Zp r = Zp::primroot_n(4 * m), r_inv = r.invert();
-				Zp t = r, t_inv = r_inv;
-				for (size_t i = 1; i < m; ++i)
-				{
-					w[2 * m + i] = t; t *= r;
-					w[2 * m + m + i] = t_inv; t_inv *= r_inv;
-				}
+				const size_t j = bitrev(i, n / 2);
+				w[j] = t; wi[j] = ti;
+				t *= r; ti *= ri;
+// std::cout << n << ", " << j << ": " << bitrev(j, n / 2) << ", " << w[j].get()<< ", " << (-wi[j]).get() << std::endl;
 			}
+// exit(0);
 		}
+
 	}
 
 	void forward(const size_t n, const int ln, const bool is_y = false)
@@ -68,22 +78,19 @@ private:
 		Zp * const x = is_y ? _y : _x;
 		const Zp * const w = _w;
 
-		for (size_t m = n / 4, s = n / 4 / m; m >= 2; m /= 4, s *= 4)
+		for (size_t m = n / 4, s = 1; m >= 2; m /= 4, s *= 4)
 		{
 			for (size_t j = 0; j < s; ++j)
 			{
-				const size_t k = 4 * m * j;
-				const Zp u0 = x[k + 0 * m], u2 = x[k + 2 * m], u1 = x[k + 1 * m], u3 = x[k + 3 * m];
-				const Zp v0 = u0 + u2, v2 = u0 - u2, v1 = u1 + u3, v3 = Zp(u1 - u3).mul_i();
-				x[k + 0 * m] = v0 + v1; x[k + 1 * m] = v0 - v1; x[k + 2 * m] = v2 + v3; x[k + 3 * m] = v2 - v3;
+				// const Zp w_1 = w[j], w_2 = w[2 * j + 0], w_3 = w[2 * j + 1];
+				const Zp w_2 = w[2 * j + 0], w_1 = w_2 * w_2, w_3 = w_2.mul_i();
 
-				for (size_t i = 1; i < m; ++i)
+				for (size_t i = 0; i < m; ++i)
 				{
-					const Zp w_2 = w[2 * m + i], w_1 = w_2 * w_2, w_3 = w_1 * w_2;
 					const size_t k = 4 * m * j + i;
-					const Zp u0 = x[k + 0 * m], u2 = x[k + 2 * m], u1 = x[k + 1 * m], u3 = x[k + 3 * m];
-					const Zp v0 = u0 + u2, v2 = u0 - u2, v1 = u1 + u3, v3 = Zp(u1 - u3).mul_i();
-					x[k + 0 * m] = v0 + v1; x[k + 1 * m] = (v0 - v1) * w_1; x[k + 2 * m] = (v2 + v3) * w_2; x[k + 3 * m] = (v2 - v3) * w_3;
+					const Zp u0 = x[k + 0 * m], u2 = x[k + 2 * m] * w_1, u1 = x[k + 1 * m], u3 = x[k + 3 * m] * w_1;
+					const Zp v0 = u0 + u2, v2 = u0 - u2, v1 = (u1 + u3) * w_2, v3 = (u1 - u3) * w_3;
+					x[k + 0 * m] = v0 + v1; x[k + 1 * m] = v0 - v1; x[k + 2 * m] = v2 + v3; x[k + 3 * m] = v2 - v3;
 				}
 			}
 		}
@@ -92,45 +99,38 @@ private:
 		{
 			if (ln % 2 == 0)
 			{
-				for (size_t k = 0; k < n; k += 4)
+				for (size_t j = 0; j < n / 4; ++j)
 				{
-					const Zp u0 = x[k + 0], u2 = x[k + 2], u1 = x[k + 1], u3 = x[k + 3];
-					const Zp v0 = u0 + u2, v2 = u0 - u2, v1 = u1 + u3, v3 = Zp(u1 - u3).mul_i();
+					// const Zp w_1 = w[j], w_2 = w[2 * j + 0], w_3 = w[2 * j + 1];
+					const Zp w_2 = w[2 * j + 0], w_1 = w_2 * w_2, w_3 = w_2.mul_i();
+
+					const size_t k = 4 * j;
+					const Zp u0 = x[k + 0], u2 = x[k + 2] * w_1, u1 = x[k + 1], u3 = x[k + 3] * w_1;
+					const Zp v0 = u0 + u2, v2 = u0 - u2, v1 = (u1 + u3) * w_2, v3 = (u1 - u3) * w_3;
 					x[k + 0] = v0 + v1; x[k + 1] = v0 - v1; x[k + 2] = v2 + v3; x[k + 3] = v2 - v3;
-				}
-			}
-			else
-			{
-				for (size_t k = 0; k < n; k += 4)
-				{
-					const Zp u0 = x[k + 0], u1 = x[k + 1], u2 = x[k + 2], u3 = x[k + 3];
-					x[k + 0] = u0 + u1; x[k + 1] = u0 - u1; x[k + 2] = u2 + u3; x[k + 3] = u2 - u3;
 				}
 			}
 		}
 	}
 
-	void backward(const size_t n, const int ln)
+	void backward(const size_t n, const int ln, const bool is_y = false)
 	{
-		Zp * const x = _x;
-		const Zp * const w = _w;
+		Zp * const x = is_y ? _y : _x;
+		const Zp * const wi = _wi;
 
 		for (size_t m = (ln % 2 == 0) ? 4 : 2, s = n / 4 / m; m <= n / 4; m *= 4, s /= 4)
 		{
 			for (size_t j = 0; j < s; ++j)
 			{
-				const size_t k = 4 * m * j;
-				const Zp u0 = x[k + 0 * m], u1 = x[k + 1 * m], u2 = x[k + 2 * m], u3 = x[k + 3 * m];
-				const Zp v0 = u0 + u1, v1 = u0 - u1, v2 = u2 + u3, v3 = Zp(u3 - u2).mul_i();
-				x[k + 0 * m] = v0 + v2; x[k + 2 * m] = v0 - v2; x[k + 1 * m] = v1 + v3; x[k + 3 * m] = v1 - v3;
+				// const Zp wi_1 = wi[j], wi_2 = wi[2 * j + 0], wi_3 = wi[2 * j + 1];
+				const Zp wi_2 = wi[2 * j + 0], wi_1 = wi_2 * wi_2, wi_3 = -wi_2.mul_i();
 
-				for (size_t i = 1; i < m; ++i)
+				for (size_t i = 0; i < m; ++i)
 				{
-					const Zp w_2i = w[2 * m + m + i], w_1i = w_2i * w_2i, w_3i = w_1i * w_2i;
 					const size_t k = 4 * m * j + i;
-					const Zp u0 = x[k + 0 * m], u1 = x[k + 1 * m] * w_1i, u2 = x[k + 2 * m] * w_2i, u3 = x[k + 3 * m] * w_3i;
-					const Zp v0 = u0 + u1, v1 = u0 - u1, v2 = u2 + u3, v3 = Zp(u3 - u2).mul_i();
-					x[k + 0 * m] = v0 + v2; x[k + 2 * m] = v0 - v2; x[k + 1 * m] = v1 + v3; x[k + 3 * m] = v1 - v3;
+					const Zp u0 = x[k + 0 * m], u1 = x[k + 1 * m], u2 = x[k + 2 * m], u3 = x[k + 3 * m];
+					const Zp v0 = u0 + u1, v1 = (u0 - u1) * wi_2, v2 = u2 + u3, v3 = (u2 - u3) * wi_3;
+					x[k + 0 * m] = v0 + v2; x[k + 2 * m] = (v0 - v2) * wi_1; x[k + 1 * m] = v1 + v3; x[k + 3 * m] = (v1 - v3) * wi_1;
 				}
 			}
 		}
@@ -140,27 +140,49 @@ private:
 	{
 		Zp * const x = _x;
 		const Zp * const y = _y;
+		const Zp * const w = _w;
+		const Zp * const wi = _wi;
 
 		if (ln % 2 == 0)
 		{
-			for (size_t k = 0; k < n; k += 4)
+			for (size_t j = 0; j < n / 4; ++j)
 			{
-				const Zp u0 = x[k + 0], u2 = x[k + 2], u1 = x[k + 1], u3 = x[k + 3];
-				const Zp v0 = u0 + u2, v2 = u0 - u2, v1 = u1 + u3, v3 = Zp(u1 - u3).mul_i();
-				const Zp s0 = (v0 + v1) * y[k + 0], s1 = (v0 - v1) * y[k + 1];
-				const Zp s2 = (v2 + v3) * y[k + 2], s3 = (v2 - v3) * y[k + 3];
-				const Zp t0 = s0 + s1, t1 = s0 - s1, t2 = s2 + s3, t3 = Zp(s3 - s2).mul_i();
-				x[k + 0] = t0 + t2; x[k + 2] = t0 - t2; x[k + 1] = t1 + t3; x[k + 3] = t1 - t3;
+				// const Zp w_1 = w[j], w_2 = w[2 * j + 0], w_3 = w[2 * j + 1];
+				const Zp w_2 = w[2 * j + 0], w_1 = w_2 * w_2, w_3 = w_2.mul_i();
+
+				const size_t k = 4 * j;
+				const Zp u0 = x[k + 0], u2 = x[k + 2] * w_1, u1 = x[k + 1], u3 = x[k + 3] * w_1;
+				const Zp v0 = u0 + u2, v2 = u0 - u2, v1 = (u1 + u3) * w_2, v3 = (u1 - u3) * w_3;
+				x[k + 0] = v0 + v1; x[k + 1] = v0 - v1; x[k + 2] = v2 + v3; x[k + 3] = v2 - v3;
+			}
+
+			for (size_t k = 0; k < n; ++k) x[k] *= y[k];
+
+			for (size_t j = 0; j < n / 4; ++j)
+			{
+				// const Zp wi_1 = wi[j], wi_2 = wi[2 * j + 0], wi_3 = wi[2 * j + 1];
+				const Zp wi_2 = wi[2 * j + 0], wi_1 = wi_2 * wi_2, wi_3 = -wi_2.mul_i();
+
+				const size_t k = 4 * j;
+				const Zp u0 = x[k + 0], u1 = x[k + 1], u2 = x[k + 2], u3 = x[k + 3];
+				const Zp v0 = u0 + u1, v1 = (u0 - u1) * wi_2, v2 = u2 + u3, v3 = (u2 - u3) * wi_3;
+				
+				x[k + 0] = v0 + v2; x[k + 2] = (v0 - v2) * wi_1; x[k + 1] = v1 + v3; x[k + 3] = (v1 - v3) * wi_1;
 			}
 		}
 		else
 		{
-			for (size_t k = 0; k < n; k += 4)
+			for (size_t j = 0; j < n / 4; ++j)
 			{
-				const Zp u0 = x[k + 0], u1 = x[k + 1], u2 = x[k + 2], u3 = x[k + 3];
-				const Zp v0 = (u0 + u1) * y[k + 0], v1 = (u0 - u1) * y[k + 1];
-				const Zp v2 = (u2 + u3) * y[k + 2], v3 = (u2 - u3) * y[k + 3];
-				x[k + 0] = v0 + v1; x[k + 1] = v0 - v1; x[k + 2] = v2 + v3; x[k + 3] = v2 - v3;
+				const Zp w_1 = w[j];
+
+				const size_t k = 4 * j;
+				const Zp u0 = x[k + 0], u1 = x[k + 1], u0p = y[k + 0], u1p = y[k + 1];
+				const Zp v0 = u0 * u0p + w_1 * u1 * u1p, v1 = u0 * u1p + u1 * u0p;
+				x[k + 0] = v0 + v0; x[k + 1] = v1 + v1;
+				const Zp u2 = x[k + 2], u3 = x[k + 3], u2p = y[k + 2], u3p = y[k + 3];
+				const Zp v2 = u2 * u2p - w_1 * u3 * u3p, v3 = u2 * u3p + u3 * u2p;
+				x[k + 2] = v2 + v2; x[k + 3] = v3 + v3;
 			}
 		}
 	}
@@ -177,18 +199,37 @@ private:
 		for (size_t i = 4 * d_size; i < n; ++i) x[i] = Zp(0);
 	}
 
+	static uint64_t get_d(const Zp * const x_i, const Zp & r, uint64_t & t)
+	{
+		uint64_t d_i = 0;
+		for (size_t j = 0; j < 4; ++j)
+		{
+			t += Zp(x_i[j] * r).get();
+			d_i |= uint64_t(uint16_t(t)) << (16 * j);
+			t >>= 16;
+		}
+		return d_i;
+	}
+
 	void get(const size_t n, uint64_t * const d, const size_t d_size) const
 	{
 		const Zp * const x = _x;
 
 		const Zp r = Zp::reciprocal(n);
 
-		uint64_t t = 0;
-		for (size_t i = 0; i < d_size; ++i)
+		uint64_t t0 = 0, t1 = 0;
+		for (size_t i = 0, j = d_size / 2; i < d_size / 2; ++i, ++j)
 		{
-			uint64_t d_i[4];
-			for (size_t j = 0; j < 4; ++j) { const Zp x_ij = x[4 * i + j] * r; t += x_ij.get(); d_i[j] = uint16_t(t); t >>= 16; }
-			d[i] = d_i[0] | (d_i[1] << 16) | (d_i[2] << 32) | (d_i[3] << 48);
+			d[i] = get_d(&x[4 * i], r, t0);
+			d[j] = get_d(&x[4 * j], r, t1);
+		}
+		if (d_size % 2 == 1) d[d_size - 1] = get_d(&x[4 * (d_size - 1)], r, t1);
+		for (size_t j = d_size / 2; j < d_size; ++j)
+		{
+			const __uint128_t t = d[j] + __uint128_t(t0);
+			d[j] = uint64_t(t);
+			t0 = uint64_t(t >> 64);
+			if (t0 == 0) break;
 		}
 	}
 

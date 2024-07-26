@@ -426,7 +426,7 @@ public:
 		}
 
 		double time_gcf_extend = 0, time_gcf_mul = 0, time_gcf_div_invert = 0, time_gcf_div_exact = 0, time_cf_reduce = 0;
-		size_t M_min_size = 0, Mgcf_size = 0;	// divisor_size = 0, M_max_size = 0;
+		size_t M_min_size = 0, Mgcf_size = 0, divisor_size = 0, M_max_size = 0;
 		uint64_t j_prev = _j;
 
 		const auto start_time = std::chrono::high_resolution_clock::now();
@@ -458,11 +458,13 @@ public:
 // std::cout << "M: 4x 1.0" << std::endl;
 // std::cout << "Mgcf: 4x " << (Mgcf.get_byte_count() / 4) / ref << std::endl;
 // std::cout << "Divisor: " << divisor.get_byte_count() / ref<< std::endl;
-				// divisor_size = divisor.get_byte_count();
+				divisor_size = divisor.get_byte_count();
 
 				time_gcf_mul += gcf_mul(M, Mgcf);
 				Mgcf.clear();
 // std::cout << "M_mul: 4x " << (M.get_byte_count() / 4) / ref << std::endl;
+
+				M_max_size = M.get_byte_count();
 
 				int right_shift; divisor.div_norm(right_shift);
 				guint divisor_inv(divisor.get_size() + 1);
@@ -471,8 +473,6 @@ public:
 // std::cout << "M_div: 4x " << (M.get_byte_count() / 4) / ref << std::endl;
 			}
 			n += nstep;
-
-			// M_max_size = M.get_byte_count();
 
 			time_cf_reduce += cf_reduce(M, found);
 // std::cout << "M_red: 4x " << (M.get_byte_count() / 4) / ref << std::endl;
@@ -496,9 +496,10 @@ public:
 				{
 					const double time_total = time_gcf_extend + time_gcf_mul + time_gcf_div_invert + time_gcf_div_exact + time_cf_reduce;
 
-					ss << std::endl;
-					// << "M_max: " << M_max_size << ", M_min: " << M_min_size << ", Mgcf: " << Mgcf_size << ", divisor: " << divisor_size << ", "
-					ss << "    Memory usage: " << heap.get_memory_info() << std::endl;
+					ss	<< std::endl
+						<< "    " << Heap::get_size_str(M_min_size) << " <= M size <= " << Heap::get_size_str(M_max_size)
+						<< ", Mgcf size = " << Heap::get_size_str(Mgcf_size) << ", divisor size = " << Heap::get_size_str(divisor_size) << std::endl;
+					ss	<< "    Memory usage: " << heap.get_memory_info() << std::endl;
 					ss	<< "    CPU usage: " << std::setprecision(3)
 						<< "gcf_extend: " << time_gcf_extend * 100 / time_total << "%, gcf_mul: " << time_gcf_mul * 100 / time_total << "%, "
 						<< "gcf_div_invert: " << time_gcf_div_invert * 100 / time_total << "%, gcf_div_exact: " << time_gcf_div_exact * 100 / time_total

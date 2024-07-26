@@ -67,6 +67,13 @@ private:
 	}
 
 public:
+	static std::string get_size_str(const size_t size)
+	{
+		size_t size_divisor; std::string size_unit; get_unit(size, size_divisor, size_unit);
+		std::ostringstream ss; ss << size / size_divisor << " " << size_unit;
+		return ss.str();
+	}
+
 	static size_t get_min_size(const size_t size) { return (size / Heap::min_size + 1) * Heap::min_size; }
 
 	std::string get_memory_size() const

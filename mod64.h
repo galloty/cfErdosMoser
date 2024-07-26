@@ -39,38 +39,36 @@ class Zp
 {
 private:
 	static const uint64_t _p = (((uint64_t(1) << 32) - 1) << 32) + 1;	// 2^64 - 2^32 + 1
+	static const uint64_t _mp = (uint64_t(1) << 32) - 1;				// -p = 2^32 - 1
 	static const uint64_t _primroot = 7;
 	uint64_t _n;
+
+	Zp & _mod_p(const __uint128_t t)
+	{
+		const uint64_t lo = uint64_t(t), hi = uint64_t(t >> 64);
+		// hi.hi * 2^96 + hi.lo * 2^64 + lo = lo + hi.lo * 2^32 - (hi.hi + hi.lo)
+		*this = Zp().set(lo) + Zp(hi << 32) - Zp((hi >> 32) + uint32_t(hi));
+		return *this;
+	}
 
 public:
 	Zp() {}
 	explicit Zp(const uint64_t n) : _n(n) {}
 
 	uint64_t get() const { return _n; }
+	Zp & set(const uint64_t n) { const uint64_t c = (n >= _p) ? _mp : 0; _n = n + c; return *this; }
 
 	Zp operator-() const { return Zp((_n != 0) ? _p - _n : 0); }
 
-	Zp & operator+=(const Zp & rhs) { const uint64_t c = (_n >= _p - rhs._n) ? _p : 0; _n += rhs._n - c; return *this; }
-	Zp & operator-=(const Zp & rhs) { const uint64_t c = (_n < rhs._n) ? _p : 0; _n -= rhs._n - c; return *this; }
+	Zp & operator+=(const Zp & rhs) { const uint64_t c = (_n >= _p - rhs._n) ? _mp : 0; _n += rhs._n + c; return *this; }
+	Zp & operator-=(const Zp & rhs) { const uint64_t c = (_n < rhs._n) ? _mp : 0; _n -= rhs._n + c; return *this; }
 	Zp operator+(const Zp & rhs) const { Zp r = *this; r += rhs; return r; }
 	Zp operator-(const Zp & rhs) const { Zp r = *this; r -= rhs; return r; }
 
-	Zp & operator*=(const Zp & rhs)
-	{
-		const __uint128_t t = _n * __uint128_t(rhs._n);
-		const uint64_t lo = uint64_t(t), hi = uint64_t(t >> 64);
-		// hi.hi * 2^96 + hi.lo * 2^64 + lo = lo + hi.lo * 2^32 - (hi.hi + hi.lo)
-		*this = Zp(lo) + Zp(hi << 32) - Zp((hi >> 32) + uint32_t(hi));
-		return *this;
-	}
+	Zp & operator*=(const Zp & rhs) { _mod_p(_n * __uint128_t(rhs._n)); return *this; }
 	Zp operator*(const Zp & rhs) const { Zp r = *this; r *= rhs; return r; }
 
-	Zp mul_i() const
-	{
-		const __uint128_t t = __uint128_t(_n) << 48;	// i = 2^48
-		const uint64_t lo = uint64_t(t), hi = uint64_t(t >> 64);
-		return Zp(lo) + Zp(hi << 32) - Zp((hi >> 32) + uint32_t(hi));
-	}
+	Zp mul_i() const { return Zp()._mod_p(__uint128_t(_n) << 48); }	// i = 2^48
 
 	Zp pow(const uint64_t e) const
 	{
