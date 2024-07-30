@@ -264,7 +264,7 @@ public:
 		const size_t new_size = xsize + ysize;
 		_set_size(new_size);
 
-		if (ysize < 16) g_mul(_d, x._d, xsize, y._d, ysize);
+		if ((ysize < 16) || (xsize <= 2 * ysize)) g_mul(_d, x._d, xsize, y._d, ysize);
 		else
 		{
 			const size_t n = xsize / ysize, n_r = xsize % ysize;	// n >= 1
@@ -286,8 +286,7 @@ public:
 			else g_copy(&_d[n * ysize], c._d, ysize);
 		}
 
-		uint64_t * const d = _d;
-		if (d[new_size - 1] == 0) _set_size(new_size - 1);
+		if (_d[new_size - 1] == 0) _set_size(new_size - 1);
 		return *this;
 	}
 

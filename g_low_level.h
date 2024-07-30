@@ -234,12 +234,36 @@ inline void g_sub(uint64_t * const z, const uint64_t * const x, const size_t x_s
 #endif
 }
 
+#ifndef GMP_MPN
+// x_size >= y_size >= 2
 inline void smul(uint64_t * const z, const uint64_t * const x, const size_t x_size, const uint64_t * const y, const size_t y_size)
 {
-	g_zero(z, y_size);
-	for (size_t i = 0; i < x_size; ++i)
+	uint64_t carry0 = 0, carry1 = 0, t = 0;
+	for (size_t j = 0; j < y_size; ++j)
 	{
-		uint64_t carry = 0;
+		z[j + 0] = _madc(x[0], y[j], t, carry0);
+		t = _mulc(x[1], y[j], carry1);
+	}
+	z[y_size + 0] = _addc(t, 0, carry0);
+	z[y_size + 1] = carry0 + carry1;
+
+	for (size_t i = 2; i < x_size - 1; i += 2)
+	{
+		z[i + y_size] = 0;
+
+		uint64_t carry0 = 0, carry1 = 0, t = z[i];
+		for (size_t j = 0; j < y_size; ++j)
+		{
+			z[i + j + 0] = _madc(x[i + 0], y[j], t, carry0);
+			t = _madc(x[i + 1], y[j], z[i + j + 1], carry1);
+		}
+		z[i + y_size + 0] = _addc(t, 0, carry0);
+		z[i + y_size + 1] = carry0 + carry1;
+	}
+
+	if (x_size % 2 != 0)
+	{
+		uint64_t i = x_size - 1, carry = 0;
 		for (size_t j = 0; j < y_size; ++j)
 		{
 			z[i + j] = _madc(x[i], y[j], z[i + j], carry);
@@ -247,6 +271,7 @@ inline void smul(uint64_t * const z, const uint64_t * const x, const size_t x_si
 		z[i + y_size] = carry;
 	}
 }
+#endif
 
 // x_size >= y_size > 0, z_size = x_size + y_size
 inline void g_mul(uint64_t * const z, const uint64_t * const x, const size_t x_size, const uint64_t * const y, const size_t y_size)
@@ -262,7 +287,7 @@ inline void g_mul(uint64_t * const z, const uint64_t * const x, const size_t x_s
 		return;
 	}
 
-	if (y_size < 16) smul(z, x, x_size, y, y_size);
+	if (y_size < 128) smul(z, x, x_size, y, y_size);
 	else FastMul::get_instance().fmul(z, x, x_size, y, y_size);
 
 	// static double max_ratio = 1;

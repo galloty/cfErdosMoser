@@ -481,16 +481,18 @@ public:
 
 			now = std::chrono::high_resolution_clock::now();
 
-			if ((std::chrono::duration<double>(now - display_time).count() > 1) || found)
+			const double dt = std::chrono::duration<double>(now - display_time).count();
+			if ((dt > 1) || found)
 			{
 				display_time = now;
 
 				std::ostringstream ss;
 				const double elapsed_time = t0 + std::chrono::duration<double>(now - start_time).count();
-				ss	<< format_time(elapsed_time) << ": n = " << n << " [" << nstep << "], "
-					<< "j = " << _j << " (+" << _j - j_prev << "), " << "q_j = " << _q_j.to_string();
+				ss	<< format_time(elapsed_time) << ": q_j = " << _q_j.to_string() << ", n = " << n << " [" << nstep << "], "
+					<< "j = " << _j << " (dj/dt = " << int((_j - j_prev) / dt) << ")";
 				if (!_verbose) ss << ", mem usage: " << heap.get_memory_usage();
 				ss << ".";
+				j_prev = _j;
 
 				if (_verbose)
 				{
@@ -511,7 +513,6 @@ public:
 				}
 
 				print(ss.str());
-				j_prev = _j;
 			}
 
 			if (found) found = condition_d();

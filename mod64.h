@@ -40,7 +40,7 @@ class Zp
 private:
 	static const uint64_t _p = (((uint64_t(1) << 32) - 1) << 32) + 1;	// 2^64 - 2^32 + 1
 	static const uint64_t _mp = (uint64_t(1) << 32) - 1;				// -p = 2^32 - 1
-	static const uint64_t _primroot = 7;
+	static const uint64_t _primroot = 55;	// Such that r^{(p - 1)/4} = 2^48 and r^{(p - 1)/8} = 2^24
 	uint64_t _n;
 
 	Zp & _mod_p(const __uint128_t t)
@@ -48,7 +48,7 @@ private:
 		const uint64_t lo = uint64_t(t), hi = uint64_t(t >> 64);
 		// hi.hi * 2^96 + hi.lo * 2^64 + lo = lo + hi.lo * 2^32 - hi.lo - hi.hi
 		// hi.lo * 2^32 - hi.lo <= (2^32 - 1)^2 < p
-		*this = Zp().set(lo) + Zp((hi << 32) - uint32_t(hi)) - Zp(hi >> 32);
+		*this = Zp((hi << 32) - uint32_t(hi)) - Zp(hi >> 32) + Zp().set(lo);
 		return *this;
 	}
 
@@ -69,7 +69,9 @@ public:
 	Zp & operator*=(const Zp & rhs) { _mod_p(_n * __uint128_t(rhs._n)); return *this; }
 	Zp operator*(const Zp & rhs) const { Zp r = *this; r *= rhs; return r; }
 
-	Zp mul_i() const { return Zp()._mod_p(__uint128_t(_n) << 48); }	// i = 2^48
+	Zp mul_i() const { return Zp()._mod_p(__uint128_t(_n) << 48); }			// i = 2^48
+	Zp mul_sqrt_i() const { return Zp()._mod_p(__uint128_t(_n) << 24); }	// sqrt(i) = 2^24
+	Zp mul_i_sqrt_i() const { return Zp()._mod_p(_n * __uint128_t(((uint64_t(1) << 32) - 1) << 8)); }
 
 	Zp pow(const uint64_t e) const
 	{
