@@ -370,7 +370,7 @@ public:
 		uint64_t hi = d[_size - 1]; while (hi >> 63 != 1) { hi *= 2; --rshift; }
 		right_shift = rshift;
 
-		if (rshift > 0) *this >>= rshift; else if (rshift < 0) *this <<= -rshift;
+		if (rshift > 0) *this >>= size_t(rshift); else if (rshift < 0) *this <<= size_t(-rshift);
 		return *this;
 	}
 
@@ -449,7 +449,7 @@ public:
 	// *this /= d, remainder must be zero
 	guint & div_exact(const guint & d, const guint & d_inv, const int right_shift)
 	{
-		if (right_shift > 0) *this >>= right_shift; else if (right_shift < 0) *this <<= -right_shift;
+		if (right_shift > 0) *this >>= size_t(right_shift); else if (right_shift < 0) *this <<= size_t(-right_shift);
 
 		guint q(_size - d._size + 1), r(d._size); div_rem(q, r, d, d_inv);
 		if (r._size != 0) throw std::runtime_error("div_exact failed");
@@ -510,7 +510,7 @@ public:
 
 		// Lehmer's gcd: 0%
 		int right_shift; guint d = y; d.div_norm(right_shift); guint d_inv(d._size + 1); d_inv.div_invert(d);
-		*this = x; if (right_shift > 0) *this >>= right_shift; else if (right_shift < 0) *this <<= -right_shift;
+		*this = x; if (right_shift > 0) *this >>= size_t(right_shift); else if (right_shift < 0) *this <<= size_t(-right_shift);
 		guint q(_size - d._size + 1), r(d._size); div_rem(q, r, d, d_inv);
 		*this = q;
 		return *this;

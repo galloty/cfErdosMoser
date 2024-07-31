@@ -88,27 +88,40 @@ private:
 		}
 	}
 
-	static void _forward(Zp * const x, const size_t m, const Zp & w_1, const Zp & w_2, const Zp & w_3)
+	static void _forward4(Zp * const x, const size_t m, const Zp & w_1, const Zp & w_2, const Zp & w_3)
 	{
-		for (size_t i = 0; i < m; ++i)
-		{
-			const Zp u0 = x[i + 0 * m], u2 = x[i + 2 * m] * w_1, u1 = x[i + 1 * m], u3 = x[i + 3 * m] * w_1;
-			const Zp v0 = u0 + u2, v2 = u0 - u2, v1 = (u1 + u3) * w_2, v3 = (u1 - u3) * w_3;
-			x[i + 0 * m] = v0 + v1; x[i + 1 * m] = v0 - v1; x[i + 2 * m] = v2 + v3; x[i + 3 * m] = v2 - v3;
-		}
+		const Zp u0 = x[0 * m], u2 = x[2 * m] * w_1, u1 = x[1 * m], u3 = x[3 * m] * w_1;
+		const Zp v0 = u0 + u2, v2 = u0 - u2, v1 = (u1 + u3) * w_2, v3 = (u1 - u3) * w_3;
+		x[0 * m] = v0 + v1; x[1 * m] = v0 - v1; x[2 * m] = v2 + v3; x[3 * m] = v2 - v3;
 	}
 
-	static void _backward(Zp * const x, const size_t m, const Zp & wi_1, const Zp & wi_2, const Zp & wi_3)
+	static void _backward4(Zp * const x, const size_t m, const Zp & wi_1, const Zp & wi_2, const Zp & wi_3)
 	{
-		for (size_t i = 0; i < m; ++i)
-		{
-			const Zp u0 = x[i + 0 * m], u1 = x[i + 1 * m], u2 = x[i + 2 * m], u3 = x[i + 3 * m];
-			const Zp v0 = u0 + u1, v1 = (u0 - u1) * wi_2, v2 = u2 + u3, v3 = (u2 - u3) * wi_3;
-			x[i + 0 * m] = v0 + v2; x[i + 2 * m] = (v0 - v2) * wi_1; x[i + 1 * m] = v1 + v3; x[i + 3 * m] = (v1 - v3) * wi_1;
-		}
+		const Zp u0 = x[0 * m], u1 = x[1 * m], u2 = x[2 * m], u3 = x[3 * m];
+		const Zp v0 = u0 + u1, v1 = (u0 - u1) * wi_2, v2 = u2 + u3, v3 = (u2 - u3) * wi_3;
+		x[0 * m] = v0 + v2; x[2 * m] = (v0 - v2) * wi_1; x[1 * m] = v1 + v3; x[3 * m] = (v1 - v3) * wi_1;
 	}
 
-	static void _mul(Zp * const x, const Zp * const y, const Zp & w_1)
+	static void _forward4_0(Zp * const x, const size_t m)
+	{
+		const Zp u0 = x[0 * m], u2 = x[2 * m], u1 = x[1 * m], u3 = x[3 * m];
+		const Zp v0 = u0 + u2, v2 = u0 - u2, v1 = u1 + u3, v3 = Zp(u1 - u3).mul_i();
+		x[0 * m] = v0 + v1; x[1 * m] = v0 - v1; x[2 * m] = v2 + v3; x[3 * m] = v2 - v3;
+	}
+
+	static void _forward8_0(Zp * const x, const size_t m)
+	{
+		const Zp u0 = x[0 * m], u4 = x[4 * m], u2 = x[2 * m], u6 = x[6 * m];
+		const Zp v0 = u0 + u4, v4 = u0 - u4, v2 = u2 + u6, v6 = Zp(u2 - u6).mul_i();
+		const Zp u1 = x[1 * m], u5 = x[5 * m], u3 = x[3 * m], u7 = x[7 * m];
+		const Zp v1 = u1 + u5, v5 = u1 - u5, v3 = u3 + u7, v7 = Zp(u3 - u7).mul_i();
+		const Zp s0 = v0 + v2, s2 = v0 - v2, s1 = v1 + v3, s3 = Zp(v1 - v3).mul_i();
+		x[0 * m] = s0 + s1; x[1 * m] = s0 - s1; x[2 * m] = s2 + s3; x[3 * m] = s2 - s3;
+		const Zp s4 = v4 + v6, s6 = v4 - v6, s5 = Zp(v5 + v7).mul_sqrt_i(), s7 = Zp(v5 - v7).mul_i_sqrt_i();
+		x[4 * m] = s4 + s5; x[5 * m] = s4 - s5; x[6 * m] = s6 + s7; x[7 * m] = s6 - s7;
+	}
+
+	static void _mul4(Zp * const x, const Zp * const y, const Zp & w_1)
 	{
 			const Zp u0 = x[0], u1 = x[1], u0p = y[0], u1p = y[1];
 			x[0] = u0 * u0p + w_1 * u1 * u1p; x[1] = u0 * u1p + u1 * u0p;
@@ -121,63 +134,53 @@ private:
 		Zp * const x = is_y ? _y : _x;
 		const Zp * const w = _w;
 
-		if (ln % 2 == 0)
+		for (size_t i_t = 0; i_t < 4 * m_0 / 8; ++i_t)
 		{
-			for (size_t i = 0, m = n / 8; i < m; ++i)
+			if (ln % 2 == 0)
 			{
-				const Zp u0 = x[i + 0 * m], u4 = x[i + 4 * m], u2 = x[i + 2 * m], u6 = x[i + 6 * m];
-				const Zp v0 = u0 + u4, v4 = u0 - u4, v2 = u2 + u6, v6 = Zp(u2 - u6).mul_i();
-				const Zp u1 = x[i + 1 * m], u5 = x[i + 5 * m], u3 = x[i + 3 * m], u7 = x[i + 7 * m];
-				const Zp v1 = u1 + u5, v5 = u1 - u5, v3 = u3 + u7, v7 = Zp(u3 - u7).mul_i();
-				const Zp s0 = v0 + v2, s2 = v0 - v2, s1 = v1 + v3, s3 = Zp(v1 - v3).mul_i();
-				x[i + 0 * m] = s0 + s1; x[i + 1 * m] = s0 - s1; x[i + 2 * m] = s2 + s3; x[i + 3 * m] = s2 - s3;
-				const Zp s4 = v4 + v6, s6 = v4 - v6, s5 = Zp(v5 + v7).mul_sqrt_i(), s7 = Zp(v5 - v7).mul_i_sqrt_i();
-				x[i + 4 * m] = s4 + s5; x[i + 5 * m] = s4 - s5; x[i + 6 * m] = s6 + s7; x[i + 7 * m] = s6 - s7;
-			}
-		}
-		else
-		{
-			for (size_t i = 0, m = n / 4; i < m; ++i)
-			{
-				const Zp u0 = x[i + 0 * m], u2 = x[i + 2 * m], u1 = x[i + 1 * m], u3 = x[i + 3 * m];
-				const Zp v0 = u0 + u2, v2 = u0 - u2, v1 = u1 + u3, v3 = Zp(u1 - u3).mul_i();
-				x[i + 0 * m] = v0 + v1; x[i + 1 * m] = v0 - v1; x[i + 2 * m] = v2 + v3; x[i + 3 * m] = v2 - v3;
-			}
-		}
-
-		for (size_t m = (ln % 2 == 0) ? n / 32 : n / 16, s = n / 4 / m; m > m_0; m /= 4, s *= 4)
-		{
-			for (size_t i = 0; i < m; ++i)
-			{
-				const Zp u0 = x[i + 0 * m], u2 = x[i + 2 * m], u1 = x[i + 1 * m], u3 = x[i + 3 * m];
-				const Zp v0 = u0 + u2, v2 = u0 - u2, v1 = u1 + u3, v3 = Zp(u1 - u3).mul_i();
-				x[i + 0 * m] = v0 + v1; x[i + 1 * m] = v0 - v1; x[i + 2 * m] = v2 + v3; x[i + 3 * m] = v2 - v3;
-			}
-
-			for (size_t j = 1; j < s; ++j)
-			{
-				const Zp w_1 = w[j], w_2 = w[2 * j + 0], w_3 = w[2 * j + 1];	// w_1 = w_2 * w_2, w_3 = w_2.mul_i()
-
-				for (size_t i = 0; i < m; ++i)
+				for (size_t i_m = 8 * i_t, m = n / 8; i_m < m; i_m += 4 * m_0)
 				{
-					const size_t k = 4 * m * j + i;
-					const Zp u0 = x[k + 0 * m], u2 = x[k + 2 * m] * w_1, u1 = x[k + 1 * m], u3 = x[k + 3 * m] * w_1;
-					const Zp v0 = u0 + u2, v2 = u0 - u2, v1 = (u1 + u3) * w_2, v3 = (u1 - u3) * w_3;
-					x[k + 0 * m] = v0 + v1; x[k + 1 * m] = v0 - v1; x[k + 2 * m] = v2 + v3; x[k + 3 * m] = v2 - v3;
+					for (size_t i_8 = 0; i_8 < 8; ++i_8) _forward8_0(&x[i_m + i_8], m);
+				}
+			}
+			else
+			{
+				for (size_t i_m = 8 * i_t, m = n / 4; i_m < m; i_m += 4 * m_0)
+				{
+					for (size_t i_8 = 0; i_8 < 8; ++i_8) _forward4_0(&x[i_m + i_8], m);
+				}
+			}
+
+			for (size_t m = (ln % 2 == 0) ? n / 32 : n / 16, s = n / 4 / m; m >= 4 * m_0; m /= 4, s *= 4)
+			{
+				for (size_t i_m = 8 * i_t; i_m < m; i_m += 4 * m_0)
+				{
+					for (size_t i_8 = 0; i_8 < 8; ++i_8) _forward4_0(&x[i_m + i_8], m);
+				}
+
+				for (size_t j = 1; j < s; ++j)
+				{
+					const Zp w_1 = w[j], w_2 = w[2 * j + 0], w_3 = w[2 * j + 1];	// w_1 = w_2 * w_2, w_3 = w_2.mul_i()
+
+					for (size_t i_m = 8 * i_t; i_m < m; i_m += 4 * m_0)
+					{
+						for (size_t i_8 = 0; i_8 < 8; ++i_8) _forward4(&x[4 * m * j + i_m + i_8], m, w_1, w_2, w_3);	// 64-byte cache line size
+					}
 				}
 			}
 		}
 
 		if (is_y)
 		{
-			for (size_t j_0 = 0, s_0 = n / 4 / m_0; j_0 < s_0; ++j_0)
+			for (size_t j_t = 0, s_0 = n / 4 / m_0; j_t < s_0; ++j_t)
 			{
 				for (size_t m = m_0, s = 1; m >= 2; m /= 4, s *= 4)
 				{
 					for (size_t j_s = 0; j_s < s; ++j_s)
 					{
-						const size_t j = j_0 * s + j_s;
-						_forward(&x[4 * m * j], m, w[j], w[2 * j + 0], w[2 * j + 1]);
+						const size_t j = j_t * s + j_s;
+						const Zp w_1 = w[j], w_2 = w[2 * j + 0], w_3 = w[2 * j + 1];
+						for (size_t i = 0; i < m; ++i) _forward4(&x[4 * m * j + i], m, w_1, w_2, w_3);
 					}
 				}
 			}
@@ -245,29 +248,31 @@ private:
 		const Zp * const wi = _wi;
 
 		// 4 * m_0 coefficients each step: 32 * m_0 bytes. 32 * 8 * 16 = 4 kB (L1: 32 kB, L2: 256 kB / 2 MB)
-		for (size_t j_0 = 0, s_0 = n / 4 / m_0; j_0 < s_0; ++j_0)
+		for (size_t j_t = 0, s_0 = n / 4 / m_0; j_t < s_0; ++j_t)
 		{
 			for (size_t m = m_0, s = 1; m >= 2; m /= 4, s *= 4)
 			{
 				for (size_t j_s = 0; j_s < s; ++j_s)
 				{
-					const size_t j = j_0 * s + j_s;
-					_forward(&x[4 * m * j], m, w[j], w[2 * j + 0], w[2 * j + 1]);	// w_1 = w_2 * w_2, w_3 = w_2.mul_i()
+					const size_t j = j_t * s + j_s;
+					const Zp w_1 = w[j], w_2 = w[2 * j + 0], w_3 = w[2 * j + 1];
+					for (size_t i = 0; i < m; ++i) _forward4(&x[4 * m * j + i], m, w_1, w_2, w_3);	// w_1 = w_2 * w_2, w_3 = w_2.mul_i()
 				}
 			}
 
 			for (size_t j_s = 0; j_s < m_0; ++j_s)
 			{
-				const size_t j = m_0 * j_0 + j_s;
-				_mul(&x[4 * j], &y[4 * j], w[j]);
+				const size_t j = m_0 * j_t + j_s;
+				_mul4(&x[4 * j], &y[4 * j], w[j]);
 			}
 
 			for (size_t m = 2, s = m_0 / m; m <= m_0; m *= 4, s /= 4)
 			{
 				for (size_t j_s = 0; j_s < s; ++j_s)
 				{
-					const size_t j = j_0 * s + j_s;
-					_backward(&x[4 * m * j], m, wi[j], wi[2 * j + 0], wi[2 * j + 1]);
+					const size_t j = j_t * s + j_s;
+					const Zp wi_1 = wi[j], wi_2 = wi[2 * j + 0], wi_3 = wi[2 * j + 1];
+					for (size_t i = 0; i < m; ++i) _backward4(&x[4 * m * j + i], m, wi_1, wi_2, wi_3);
 				}
 			}
 		}

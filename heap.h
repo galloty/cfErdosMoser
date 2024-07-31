@@ -40,6 +40,21 @@ public:
 	}
 
 private:
+	static void * _aligned_alloc(const size_t size, const size_t alignment, const size_t offset = 0)
+	{
+		void * const alloc_ptr = std::malloc(size + alignment + offset + sizeof(size_t));
+		const size_t addr = size_t(alloc_ptr) + alignment + sizeof(size_t);
+		size_t * const ptr = (size_t *)(addr - addr % alignment + offset);
+		ptr[-1] = size_t(alloc_ptr);
+		return (void *)(ptr);
+	}
+
+	static void _aligned_free(void * const ptr)
+	{
+		void * const alloc_ptr = (void *)((size_t *)(ptr))[-1];
+		std::free(alloc_ptr);
+	}
+
 	uint64_t * _alloc(const size_t size)
 	{
 		++_alloc_count;
@@ -175,10 +190,10 @@ public:
 	Zp * alloc_fmul(const size_t size)
 	{
 		_size_fmul += size;
-		Zp * const ptr = static_cast<Zp *>(std::malloc(size * sizeof(Zp)));
+		Zp * const ptr = static_cast<Zp *>(_aligned_alloc(size * sizeof(Zp), 4096));	// 4kB TLB pages
 		if (ptr == nullptr) throw std::runtime_error("malloc failed");
 		return ptr;
 	}
 
-	void free_fmul(Zp * const ptr, const size_t size) { _size_fmul -= size; std::free(static_cast<void *>(ptr)); }
+	void free_fmul(Zp * const ptr, const size_t size) { _size_fmul -= size; _aligned_free(static_cast<void *>(ptr)); }
 };
