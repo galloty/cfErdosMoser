@@ -187,13 +187,13 @@ public:
 		else _free(ptr);
 	}
 
-	Zp * alloc_fmul(const size_t size)
+	void * alloc_fmul(const size_t size)
 	{
 		_size_fmul += size;
-		Zp * const ptr = static_cast<Zp *>(_aligned_alloc(size * sizeof(Zp), 4096));	// 4kB TLB pages
+		void * const ptr = _aligned_alloc(size, 4096);	// 4kB TLB pages
 		if (ptr == nullptr) throw std::runtime_error("malloc failed");
 		return ptr;
 	}
 
-	void free_fmul(Zp * const ptr, const size_t size) { _size_fmul -= size; _aligned_free(static_cast<void *>(ptr)); }
+	void free_fmul(void * const ptr, const size_t size) { _size_fmul -= size; _aligned_free(ptr); }
 };

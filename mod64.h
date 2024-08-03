@@ -100,7 +100,20 @@ public:
 	static const Zp primroot_n(const int ln) { return Zp(_primroot).pow((p - 1) >> ln); }
 };
 
+typedef uint64_t v2x64 __attribute__ ((vector_size(16)));
 typedef uint64_t v4x64 __attribute__ ((vector_size(32)));
+
+class Zp2
+{
+private:
+	v2x64 _v;
+
+public:
+	finline Zp2() {}
+	finline explicit Zp2(const Zp & n0, const Zp & n1) : _v(v2x64{ n0.get(), n1.get() }) {}
+
+	finline v2x64 get() const { return _v; }
+};
 
 class Zp4
 {
@@ -111,29 +124,50 @@ private:
 
 	finline static v4x64 _add(const v4x64 & a, const v4x64 & b) { return a + b - ((a >= vp - b) & vp); }
 	finline static v4x64 _sub(const v4x64 & a, const v4x64 & b) { return a - b + ((a < b) & vp); }
-	finline static void _mul(const v4x64 & a, const uint64_t b, v4x64 & lo, v4x64 & hi)
+	finline static void _split(const __uint128_t n[4], v4x64 & lo, v4x64 & hi)
 	{
-		__uint128_t n[4]; for (size_t i = 0; i < 4; ++i) n[i] = a[i] * __uint128_t(b);
 		lo = v4x64{ uint64_t(n[0]), uint64_t(n[1]), uint64_t(n[2]), uint64_t(n[3]) };
 		hi = v4x64{ uint64_t(n[0] >> 64), uint64_t(n[1] >> 64), uint64_t(n[2] >> 64), uint64_t(n[3] >> 64) };
 	}
-	finline static void _mul(const v4x64 & a, const v4x64 & b, v4x64 & lo, v4x64 & hi)
+	finline static void _mul1(const v4x64 & a, const uint64_t b, v4x64 & lo, v4x64 & hi)
+	{
+		__uint128_t n[4]; for (size_t i = 0; i < 4; ++i) n[i] = a[i] * __uint128_t(b);
+		_split(n, lo, hi);
+	}
+	finline static void _mul2(const v4x64 & a, const v2x64 & b, v4x64 & lo, v4x64 & hi)
+	{
+		__uint128_t n[4]; for (size_t i = 0; i < 4; ++i) n[i] = a[i] * __uint128_t(b[i / 2]);
+		_split(n, lo, hi);
+	}
+	finline static void _mul4(const v4x64 & a, const v4x64 & b, v4x64 & lo, v4x64 & hi)
 	{
 		__uint128_t n[4]; for (size_t i = 0; i < 4; ++i) n[i] = a[i] * __uint128_t(b[i]);
-		lo = v4x64{ uint64_t(n[0]), uint64_t(n[1]), uint64_t(n[2]), uint64_t(n[3]) };
-		hi = v4x64{ uint64_t(n[0] >> 64), uint64_t(n[1] >> 64), uint64_t(n[2] >> 64), uint64_t(n[3] >> 64) };
+		_split(n, lo, hi);
+	}
+	finline static void _mulw(const v4x64 & a, const uint64_t w, v4x64 & lo, v4x64 & hi)
+	{
+		const uint64_t mw = (w != 0) ? Zp::p - w : 0;
+		__uint128_t n[4]; n[0] = a[0] * __uint128_t(w); n[1] = a[1]; n[2] = a[2] * __uint128_t(mw); n[3] = a[3];
+		_split(n, lo, hi);
 	}
 	finline static v4x64 _mod(const v4x64 & lo, const v4x64 & hi) { return _add(_sub(lo, hi >> 32), (hi << 32) - (hi & vm32)); }
 
 public:
 	finline Zp4() {}
 	finline explicit Zp4(const v4x64 & v) : _v(v) {}
+	finline explicit Zp4(const Zp & n) : _v(v4x64{ n.get(), n.get(), n.get(), n.get() }) {}
 	finline explicit Zp4(const Zp & n0, const Zp & n1, const Zp & n2, const Zp & n3) : _v(v4x64{ n0.get(), n1.get(), n2.get(), n3.get() }) {}
+
+	finline Zp operator[](const size_t i) const { return Zp(_v[i]); }
 
 	finline Zp4 operator+(const Zp4 & rhs) const { return Zp4(_add(_v, rhs._v)); }
 	finline Zp4 operator-(const Zp4 & rhs) const { return Zp4(_sub(_v, rhs._v)); }
-	finline Zp4 operator*(const Zp & rhs) const { v4x64 lo, hi; _mul(_v, rhs.get(), lo, hi); return Zp4(_mod(lo, hi)); }
-	finline Zp4 operator*(const Zp4 & rhs) const { v4x64 lo, hi; _mul(_v, rhs._v, lo, hi); return Zp4(_mod(lo, hi)); }
+	finline Zp4 operator*(const Zp & rhs) const { v4x64 lo, hi; _mul1(_v, rhs.get(), lo, hi); return Zp4(_mod(lo, hi)); }
+	finline Zp4 operator*(const Zp2 & rhs) const { v4x64 lo, hi; _mul2(_v, rhs.get(), lo, hi); return Zp4(_mod(lo, hi)); }
+	finline Zp4 operator*(const Zp4 & rhs) const { v4x64 lo, hi; _mul4(_v, rhs._v, lo, hi); return Zp4(_mod(lo, hi)); }
+
+	// * (w, 1, -w, 1)
+	finline Zp4 mul_w(const Zp & w) const { v4x64 lo, hi; _mulw(_v, w.get(), lo, hi); return Zp4(_mod(lo, hi)); }
 
 	finline Zp4 mul_i() const { return Zp4(_mod(_v << 48, _v >> (64 - 48))); }
 	finline Zp4 mul_sqrt_i() const { return Zp4(_mod(_v << 24, _v >> (64 - 24))); }
@@ -144,8 +178,12 @@ public:
 		return Zp4(_mod(lo, hi));
 	}
 
-	finline Zp4 unpacklo(const Zp4 & rhs) { return Zp4(__builtin_shuffle(_v, rhs._v, v4x64{ 0, 1, 4, 5 })); }
-	finline Zp4 unpackhi(const Zp4 & rhs) { return Zp4(__builtin_shuffle(_v, rhs._v, v4x64{ 2, 3, 6, 7 }));	}
+	finline Zp4 permute() const { return Zp4(__builtin_shuffle(_v, v4x64{ 1, 0, 3, 2 })); }
+	finline Zp4 unpacklo(const Zp4 & rhs) const { return Zp4(__builtin_shuffle(_v, rhs._v, v4x64{ 0, 1, 4, 5 })); }
+	finline Zp4 unpackhi(const Zp4 & rhs) const { return Zp4(__builtin_shuffle(_v, rhs._v, v4x64{ 2, 3, 6, 7 }));	}
+
+	finline Zp4 even(const Zp4 & rhs) const { return Zp4(__builtin_shuffle(_v, rhs._v, v4x64{ 0, 4, 2, 6 })); }
+	finline Zp4 odd(const Zp4 & rhs) const { return Zp4(__builtin_shuffle(_v, rhs._v, v4x64{ 1, 5, 3, 7 })); }
 
 	finline static void shuffle2in(Zp4 v[4])
 	{

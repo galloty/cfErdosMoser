@@ -20,8 +20,8 @@ private:
 	int _ln;
 	Zp * _w;
 	Zp * _wi;
-	Zp * _x;
-	Zp * _y;
+	Zp4 * _x;
+	Zp4 * _y;
 
 private:
 	struct deleter { void operator()(const FastMul * const p) { delete p; } };
@@ -48,14 +48,17 @@ private:
 	{
 		Heap & heap = Heap::get_instance();
 		if (_size != 0) { heap.free_fmul(_w, _size / 4); heap.free_fmul(_wi, _size / 4); heap.free_fmul(_x, _size); heap.free_fmul(_y, _size); }
-		_size = 0; _w = _x = _y = nullptr;
+		_size = 0; _w = _wi = nullptr; _x = _y = nullptr;
 	}
 
 	void alloc(const size_t size)
 	{
 		free();
 		Heap & heap = Heap::get_instance();
-		_w = heap.alloc_fmul(size / 4); _wi = heap.alloc_fmul(size / 4); _x = heap.alloc_fmul(size); _y = heap.alloc_fmul(size);
+		_w = static_cast<Zp *>(heap.alloc_fmul(size / 4  * sizeof(Zp)));
+		_wi = static_cast<Zp *>(heap.alloc_fmul(size / 4  * sizeof(Zp)));
+		_x = static_cast<Zp4 *>(heap.alloc_fmul(size  * sizeof(Zp)));
+		_y = static_cast<Zp4 *>(heap.alloc_fmul(size  * sizeof(Zp)));
 		_size = size;
 	}
 
@@ -68,11 +71,13 @@ private:
 		x[0 * m] = v0 + v1; x[1 * m] = v0 - v1; x[2 * m] = v2 + v3; x[3 * m] = v2 - v3;
 	}
 
-	finline static void _vforward4v(Zp4 * const x, const size_t m, const Zp4 & w_1, const Zp4 & w_2, const Zp4 & w_3)
+	finline static void _vforward4v2(Zp4 * const x, const Zp2 & w_1, const Zp2 & w_2, const Zp2 & w_3)
 	{
-		const Zp4 u0 = x[0 * m], u2 = x[2 * m] * w_1, u1 = x[1 * m], u3 = x[3 * m] * w_1;
+		Zp4::shuffle2in(x);
+		const Zp4 u0 = x[0], u2 = x[2] * w_1, u1 = x[1], u3 = x[3] * w_1;
 		const Zp4 v0 = u0 + u2, v2 = u0 - u2, v1 = (u1 + u3) * w_2, v3 = (u1 - u3) * w_3;
-		x[0 * m] = v0 + v1; x[1 * m] = v0 - v1; x[2 * m] = v2 + v3; x[3 * m] = v2 - v3;
+		x[0] = v0 + v1; x[1] = v0 - v1; x[2] = v2 + v3; x[3] = v2 - v3;
+		Zp4::shuffle2out(x);
 	}
 
 	finline static void _vbackward4(Zp4 * const x, const size_t m, const Zp & wi_1, const Zp & wi_2, const Zp & wi_3)
@@ -82,11 +87,13 @@ private:
 		x[0 * m] = v0 + v2; x[2 * m] = (v0 - v2) * wi_1; x[1 * m] = v1 + v3; x[3 * m] = (v1 - v3) * wi_1;
 	}
 
-	finline static void _vbackward4v(Zp4 * const x, const size_t m, const Zp4 & wi_1, const Zp4 & wi_2, const Zp4 & wi_3)
+	finline static void _vbackward4v2(Zp4 * const x, const Zp2 & wi_1, const Zp2 & wi_2, const Zp2 & wi_3)
 	{
-		const Zp4 u0 = x[0 * m], u1 = x[1 * m], u2 = x[2 * m], u3 = x[3 * m];
+		Zp4::shuffle2in(x);
+		const Zp4 u0 = x[0], u1 = x[1], u2 = x[2], u3 = x[3];
 		const Zp4 v0 = u0 + u1, v1 = (u0 - u1) * wi_2, v2 = u2 + u3, v3 = (u2 - u3) * wi_3;
-		x[0 * m] = v0 + v2; x[2 * m] = (v0 - v2) * wi_1; x[1 * m] = v1 + v3; x[3 * m] = (v1 - v3) * wi_1;
+		x[0] = v0 + v2; x[2] = (v0 - v2) * wi_1; x[1] = v1 + v3; x[3] = (v1 - v3) * wi_1;
+		Zp4::shuffle2out(x);
 	}
 
 	finline static void _vforward4_0(Zp4 * const x, const size_t m)
@@ -127,19 +134,25 @@ private:
 		x[1 * m] = s1 + s5; x[5 * m] = s1 - s5; x[3 * m] = s3 + s7; x[7 * m] = s3 - s7;
 	}
 
-	finline static void _mul4(Zp * const x, const Zp * const y, const Zp & w_1)
+	finline static void _mul4(Zp4 & x, const Zp4 & y, const Zp & w_1)
 	{
-			const Zp u0 = x[0], u1 = x[1], u0p = y[0], u1p = y[1];
-			x[0] = u0 * u0p + w_1 * u1 * u1p; x[1] = u0 * u1p + u1 * u0p;
-			const Zp u2 = x[2], u3 = x[3], u2p = y[2], u3p = y[3];
-			x[2] = u2 * u2p - w_1 * u3 * u3p; x[3] = u2 * u3p + u3 * u2p;
+		// const Zp u0 = x[0], u1 = x[1], u2 = x[2], u3 = x[3], u0p = y[0], u1p = y[1], u2p = y[2], u3p = y[3];
+		// const Zp v0 = u0 * u0p + w_1 * u1 * u1p, v1 = u0 * u1p + u1 * u0p;
+		// const Zp v2 = u2 * u2p - w_1 * u3 * u3p, v3 = u2 * u3p + u3 * u2p;
+		// x = Zp4(v0, v1, v2, v3);
+
+		const Zp4 xy = x * y;				// u0 * u0p, u1 * u1p, u2 * u2p, u3 * u3p
+		const Zp4 xyp = x * y.permute();	// u0 * u1p, u1 * u0p, u2 * u3p, u3 * u2p
+		const Zp4 e = xy.even(xyp);			// u0 * u0p, u0 * u1p, u2 * u2p, u2 * u3p
+		const Zp4 o = xy.odd(xyp);			// u1 * u1p, u1 * u0p, u3 * u3p, u3 * u2p
+		const Zp4 op = o.mul_w(w_1);		// w_1 * u1 * u1p, u1 * u0p, -w_1 * u3 * u3p, u3 * u2p
+		x = e + op;
 	}
 
 	void forward(const size_t m_0, const bool is_y = false)
 	{
 		const int ln = _ln; const size_t n = size_t(1) << ln;
-		Zp * const x = is_y ? _y : _x;
-		Zp4 * const vx = (Zp4 *)x;
+		Zp4 * const x = is_y ? _y : _x;
 		const Zp * const w = _w;
 
 		// n / (4 * m_0) coefficients each step
@@ -149,14 +162,14 @@ private:
 			{
 				for (size_t i_m = 2 * i_t, m = n / 32; i_m < m; i_m += m_0)
 				{
-					for (size_t i = 0; i < 2; ++i) _vforward8_0(&vx[i_m + i], m);
+					for (size_t i = 0; i < 2; ++i) _vforward8_0(&x[i_m + i], m);
 				}
 			}
 			else
 			{
 				for (size_t i_m = 2 * i_t, m = n / 16; i_m < m; i_m += m_0)
 				{
-					for (size_t i = 0; i < 2; ++i) _vforward4_0(&vx[i_m + i], m);
+					for (size_t i = 0; i < 2; ++i) _vforward4_0(&x[i_m + i], m);
 				}
 			}
 
@@ -164,7 +177,7 @@ private:
 			{
 				for (size_t i_m = 2 * i_t; i_m < m; i_m += m_0)
 				{
-					for (size_t i = 0; i < 2; ++i) _vforward4_0(&vx[i_m + i], m);
+					for (size_t i = 0; i < 2; ++i) _vforward4_0(&x[i_m + i], m);
 				}
 
 				for (size_t j = 1; j < s; ++j)
@@ -173,7 +186,7 @@ private:
 
 					for (size_t i_m = 2 * i_t; i_m < m; i_m += m_0)
 					{
-						for (size_t i = 0; i < 2; ++i) _vforward4(&vx[4 * m * j + i_m + i], m, w_1, w_2, w_3);
+						for (size_t i = 0; i < 2; ++i) _vforward4(&x[4 * m * j + i_m + i], m, w_1, w_2, w_3);
 					}
 				}
 			}
@@ -189,28 +202,15 @@ private:
 					{
 						const size_t j = j_t * s + j_s;
 						const Zp w_1 = w[j], w_2 = w[2 * j + 0], w_3 = w[2 * j + 1];
-						for (size_t i = 0; i < m; ++i) _vforward4(&vx[4 * m * j + i], m, w_1, w_2, w_3);
+						for (size_t i = 0; i < m; ++i) _vforward4(&x[4 * m * j + i], m, w_1, w_2, w_3);
 					}
 				}
 
-				for (size_t j_s = 0, s = m_0 / 2; j_s < s; j_s += 2)
+				for (size_t j_s = 0, s = m_0 / 4; j_s < s; ++j_s)
 				{
 					const size_t j = j_t * s + j_s;
-
-					const Zp w_10 = w[j + 0], w_20 = w[2 * j + 0], w_30 = w[2 * j + 1];
-					const Zp w_11 = w[j + 1], w_21 = w[2 * j + 2], w_31 = w[2 * j + 3];
-					const Zp4 w_1 = Zp4(w_10, w_10, w_11, w_11);
-					const Zp4 w_2 = Zp4(w_20, w_20, w_21, w_21);
-					const Zp4 w_3 = Zp4(w_30, w_30, w_31, w_31);
-
-					Zp4 v[4], vs[4];
-					for (size_t i = 0; i < 4; ++i) v[i] = vx[8 * j / 4 + i];
-					vs[0] = v[0].unpacklo(v[2]); vs[1] = v[0].unpackhi(v[2]);
-					vs[2] = v[1].unpacklo(v[3]); vs[3] = v[1].unpackhi(v[3]);
-					_vforward4v(vs, 1, w_1, w_2, w_3);
-					v[0] = vs[0].unpacklo(vs[1]); v[2] = vs[0].unpackhi(vs[1]);
-					v[1] = vs[2].unpacklo(vs[3]); v[3] = vs[2].unpackhi(vs[3]);
-					for (size_t i = 0; i < 4; ++i) vx[8 * j / 4 + i] = v[i];
+					const Zp2 w_1 = Zp2(w[2 * j + 0], w[2 * j + 1]), w_2 = Zp2(w[4 * j + 0], w[4 * j + 2]), w_3 = Zp2(w[4 * j + 1], w[4 * j + 3]);
+					_vforward4v2(&x[4 * j], w_1, w_2, w_3);
 				}
 			}
 		}
@@ -219,8 +219,7 @@ private:
 	void backward(const size_t m_0)
 	{
 		const int ln = _ln; const size_t n = size_t(1) << ln;
-		Zp * const x = _x;
-		Zp4 * const vx = (Zp4 *)x;
+		Zp4 * const x = _x;
 		const Zp * const wi = _wi;
 
 		// n / (4 * m_0) coefficients each step
@@ -230,7 +229,7 @@ private:
 			{
 				for (size_t i_m = 2 * i_t; i_m < m; i_m += m_0)
 				{
-					for (size_t i = 0; i < 2; ++i) _vbackward4_0(&vx[i_m + i], m);
+					for (size_t i = 0; i < 2; ++i) _vbackward4_0(&x[i_m + i], m);
 				}
 
 				for (size_t j = 1; j < s; ++j)
@@ -239,7 +238,7 @@ private:
 
 					for (size_t i_m = 2 * i_t; i_m < m; i_m += m_0)
 					{
-						for (size_t i = 0; i < 2; ++i) _vbackward4(&vx[4 * m * j + i_m + i], m, wi_1, wi_2, wi_3);
+						for (size_t i = 0; i < 2; ++i) _vbackward4(&x[4 * m * j + i_m + i], m, wi_1, wi_2, wi_3);
 					}
 				}
 			}
@@ -248,14 +247,14 @@ private:
 			{
 				for (size_t i_m = 2 * i_t, m = n / 32; i_m < m; i_m += m_0)
 				{
-					for (size_t i = 0; i < 2; ++i) _vbackward8_0(&vx[i_m + i], m);
+					for (size_t i = 0; i < 2; ++i) _vbackward8_0(&x[i_m + i], m);
 				}
 			}
 			else
 			{
 				for (size_t i_m = 2 * i_t, m = n / 16; i_m < m; i_m += m_0)
 				{
-					for (size_t i = 0; i < 2; ++i) _vbackward4_0(&vx[i_m + i], m);
+					for (size_t i = 0; i < 2; ++i) _vbackward4_0(&x[i_m + i], m);
 				}
 			}
 		}
@@ -264,9 +263,8 @@ private:
 	void mul(const size_t m_0)
 	{
 		const size_t n = size_t(1) << _ln;
-		Zp * const x = _x;
-		Zp4 * const vx = (Zp4 *)x;
-		const Zp * const y = _y;
+		Zp4 * const x = _x;
+		const Zp4 * const y = _y;
 		const Zp * const w = _w;
 		const Zp * const wi = _wi;
 
@@ -279,46 +277,28 @@ private:
 				{
 					const size_t j = j_t * s + j_s;
 					const Zp w_1 = w[j], w_2 = w[2 * j + 0], w_3 = w[2 * j + 1];
-					for (size_t i = 0; i < m; ++i) _vforward4(&vx[4 * m * j + i], m, w_1, w_2, w_3);	// w_1 = w_2 * w_2, w_3 = w_2.mul_i()
+					for (size_t i = 0; i < m; ++i) _vforward4(&x[4 * m * j + i], m, w_1, w_2, w_3);	// w_1 = w_2 * w_2, w_3 = w_2.mul_i()
 				}
 			}
 
 			for (size_t j_s = 0, s = m_0 / 4; j_s < s; ++j_s)
 			{
 				const size_t j = j_t * s + j_s;
-
-				const Zp w_10 = w[2 * j + 0], w_11 = w[2 * j + 1];
-				const Zp w_20 = w[4 * j + 0], w_30 = w[4 * j + 1], w_21 = w[4 * j + 2], w_31 = w[4 * j + 3];
-				const Zp4 w_1 = Zp4(w_10, w_10, w_11, w_11);
-				const Zp4 w_2 = Zp4(w_20, w_20, w_21, w_21);
-				const Zp4 w_3 = Zp4(w_30, w_30, w_31, w_31);
-
-				Zp4 * const v = &vx[4 * j];
-				Zp4::shuffle2in(v);
-				_vforward4v(v, 1, w_1, w_2, w_3);
-				Zp4::shuffle2out(v);
+				const Zp2 w_1 = Zp2(w[2 * j + 0], w[2 * j + 1]), w_2 = Zp2(w[4 * j + 0], w[4 * j + 2]), w_3 = Zp2(w[4 * j + 1], w[4 * j + 3]);
+				_vforward4v2(&x[4 * j], w_1, w_2, w_3);
 			}
 
 			for (size_t j_s = 0; j_s < m_0; ++j_s)
 			{
 				const size_t j = m_0 * j_t + j_s;
-				_mul4(&x[4 * j], &y[4 * j], w[j]);
+				_mul4(x[j], y[j], w[j]);
 			}
 
 			for (size_t j_s = 0, s = m_0 / 4; j_s < s; ++j_s)
 			{
 				const size_t j = j_t * s + j_s;
-
-				const Zp wi_10 = wi[2 * j + 0], wi_11 = wi[2 * j + 1];
-				const Zp wi_20 = wi[4 * j + 0], wi_30 = wi[4 * j + 1], wi_21 = wi[4 * j + 2], wi_31 = wi[4 * j + 3];
-				const Zp4 wi_1 = Zp4(wi_10, wi_10, wi_11, wi_11);
-				const Zp4 wi_2 = Zp4(wi_20, wi_20, wi_21, wi_21);
-				const Zp4 wi_3 = Zp4(wi_30, wi_30, wi_31, wi_31);
-
-				Zp4 * const v = &vx[4 * j];
-				Zp4::shuffle2in(v);
-				_vbackward4v(v, 1, wi_1, wi_2, wi_3);
-				Zp4::shuffle2out(v);
+				const Zp2 wi_1 = Zp2(wi[2 * j + 0], wi[2 * j + 1]), wi_2 = Zp2(wi[4 * j + 0], wi[4 * j + 2]), wi_3 = Zp2(wi[4 * j + 1], wi[4 * j + 3]);
+				_vbackward4v2(&x[4 * j], wi_1, wi_2, wi_3);
 			}
 
 			for (size_t m = 2, s = m_0 / (4 * m); m <= m_0 / 4; m *= 4, s /= 4)
@@ -327,18 +307,11 @@ private:
 				{
 					const size_t j = j_t * s + j_s;
 					const Zp wi_1 = wi[j], wi_2 = wi[2 * j + 0], wi_3 = wi[2 * j + 1];
-					for (size_t i = 0; i < m; ++i) _vbackward4(&vx[4 * m * j + i], m, wi_1, wi_2, wi_3);
+					for (size_t i = 0; i < m; ++i) _vbackward4(&x[4 * m * j + i], m, wi_1, wi_2, wi_3);
 				}
 			}
 		}
 	}
-
-	finline static void set_d(Zp * const x_i, const uint64_t d_i)
-	{
-		uint64_t t = d_i;
-		for (size_t j = 0; j < 4; ++j) { x_i[j] = Zp(uint16_t(t)); t >>= 16; }
-	}
-
 
 	finline static uint64_t get_d(const Zp * const x_i, const Zp & r, __uint128_t & t)
 	{
@@ -355,18 +328,30 @@ private:
 	void set(const uint64_t * const d, const size_t d_size, const bool is_y = false)
 	{
 		const size_t n = size_t(1) << _ln;
-		Zp * const x = is_y ? _y :_x;
+		Zp4 * const x = is_y ? _y :_x;
 
-		for (size_t i = 0; i < d_size; ++i) set_d(&x[4 * i], d[i]);
-		for (size_t k = 4 * d_size; k < n; ++k) x[k] = Zp(0);
+		for (size_t i = 0; i < d_size; ++i) x[i] = Zp4(Zp(uint16_t(d[i])), Zp(uint16_t(d[i] >> 16)), Zp(uint16_t(d[i] >> 32)), Zp(uint16_t(d[i] >> 48)));
+		for (size_t k = d_size; k < n / 4; ++k) x[k] = Zp4(Zp(0));
 	}
 
 	void get(uint64_t * const d, const size_t d_size) const
 	{
-		const Zp * const x = _x;
+		const Zp4 * const x = _x;
 
 		const Zp r = Zp::reciprocal(_ln - 1);
-		__uint128_t t = 0; for (size_t i = 0; i < d_size; ++i) d[i] = get_d(&x[4 * i], r, t);
+		__uint128_t t = 0;
+		for (size_t i = 0; i < d_size; ++i)
+		{
+			const Zp4 xr = x[i] * r;
+			uint64_t d_i = 0;
+			for (size_t j = 0; j < 4; ++j)
+			{
+				t += xr[j].get();
+				d_i |= uint64_t(uint16_t(t)) << (16 * j);
+				t >>= 16;
+			}
+			d[i] = d_i;
+		}
 	}
 
 public:
