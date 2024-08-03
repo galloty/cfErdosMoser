@@ -288,7 +288,16 @@ inline void g_mul(uint64_t * const z, const uint64_t * const x, const size_t x_s
 	}
 
 	if (y_size <= 128) smul(z, x, x_size, y, y_size);
-	else FastMul::get_instance().fmul(z, x, x_size, y, y_size);
+	else
+	{
+		FastMul & fmul = FastMul::get_instance();
+		const size_t z_size = x_size + y_size;
+		fmul.init(z_size);
+		fmul.set_x(x, x_size);
+		fmul.set_y(y, y_size);
+		fmul.mul();
+		fmul.get_x(z, z_size);
+	}
 
 	// static double max_ratio = 1;
 	// const double ratio = x_size / double(y_size);
