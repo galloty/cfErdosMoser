@@ -8,6 +8,9 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #pragma once
 
 #include <cstdint>
+#ifdef __x86_64
+#include <immintrin.h>
+#endif
 
 #define finline	__attribute__((always_inline))
 
@@ -69,29 +72,22 @@ public:
 
 	finline uint64_t get() const { return _n; }
 
-	finline Zp operator+(const Zp & rhs) const { return Zp(_add(_n, rhs._n)); }
-	finline Zp operator-(const Zp & rhs) const { return Zp(_sub(_n, rhs._n)); }
+	// finline Zp operator+(const Zp & rhs) const { return Zp(_add(_n, rhs._n)); }
+	// finline Zp operator-(const Zp & rhs) const { return Zp(_sub(_n, rhs._n)); }
 	finline Zp operator*(const Zp & rhs) const { return Zp(_mod(_n * __uint128_t(rhs._n))); }
 
 	finline Zp & operator*=(const Zp & rhs) { _n = _mod(_n * __uint128_t(rhs._n)); return *this; }
 
-	finline Zp mul_i() const { return Zp(_mod(__uint128_t(_n) << 48)); }		// i = 2^48
-	finline Zp mul_sqrt_i() const { return Zp(_mod(__uint128_t(_n) << 24)); }	// sqrt(i) = 2^24
-	finline Zp mul_i_sqrt_i() const { return Zp(_mod(_n * __uint128_t(((uint64_t(1) << 32) - 1) << 8))); }	// 2^72 = (2^32 - 1) * 2^8 (mod p)
+	// finline Zp mul_i() const { return Zp(_mod(__uint128_t(_n) << 48)); }		// i = 2^48
+	// finline Zp mul_sqrt_i() const { return Zp(_mod(__uint128_t(_n) << 24)); }	// sqrt(i) = 2^24
+	// finline Zp mul_i_sqrt_i() const { return Zp(_mod(_n * __uint128_t(((uint64_t(1) << 32) - 1) << 8))); }	// 2^72 = (2^32 - 1) * 2^8 (mod p)
 
 	Zp pow(const uint64_t e) const
 	{
 		if (e == 0) return Zp(1);
-
 		Zp r = Zp(1), y = *this;
-		for (uint64_t i = e; i != 1; i /= 2)
-		{
-			if (i % 2 != 0) r *= y;
-			y *= y;
-		}
-		r *= y;
-
-		return r;
+		for (uint64_t i = e; i != 1; i /= 2) { if (i % 2 != 0) r *= y; y *= y; }
+		return r * y;
 	}
 
 	Zp invert() const { return pow(p - 2); }
@@ -129,6 +125,20 @@ private:
 		lo = v4x64{ uint64_t(n[0]), uint64_t(n[1]), uint64_t(n[2]), uint64_t(n[3]) };
 		hi = v4x64{ uint64_t(n[0] >> 64), uint64_t(n[1] >> 64), uint64_t(n[2] >> 64), uint64_t(n[3] >> 64) };
 	}
+
+#ifdef __x86_64
+	finline static void _mul(const v4x64 & a, const v4x64 & b, v4x64 & lo, v4x64 & hi)
+	{
+		const v4x64 ah = a >> 32, bh = b >> 32;
+		const v4x64 p0 = v4x64(_mm256_mul_epu32(__m256i(a), __m256i(b)));
+		const v4x64 p1 = v4x64(_mm256_mul_epu32(__m256i(ah), __m256i(b)));
+		const v4x64 p2 = v4x64(_mm256_mul_epu32(__m256i(a), __m256i(bh)));
+		const v4x64 p3 = v4x64(_mm256_mul_epu32(__m256i(ah), __m256i(bh)));
+		const v4x64 middle = (p0 >> 32) + (p1 & vm32) + (p2 & vm32);
+		lo = (p0 & vm32) | (middle << 32);
+		hi = (p1 >> 32) + (p2 >> 32) + p3 + (middle >> 32);
+	}
+#else
 	finline static void _mul1(const v4x64 & a, const uint64_t b, v4x64 & lo, v4x64 & hi)
 	{
 		__uint128_t n[4]; for (size_t i = 0; i < 4; ++i) n[i] = a[i] * __uint128_t(b);
@@ -150,6 +160,7 @@ private:
 		__uint128_t n[4]; n[0] = a[0] * __uint128_t(w); n[1] = a[1]; n[2] = a[2] * __uint128_t(mw); n[3] = a[3];
 		_split(n, lo, hi);
 	}
+#endif
 	finline static v4x64 _mod(const v4x64 & lo, const v4x64 & hi) { return _add(_sub(lo, hi >> 32), (hi << 32) - (hi & vm32)); }
 
 public:
@@ -162,12 +173,21 @@ public:
 
 	finline Zp4 operator+(const Zp4 & rhs) const { return Zp4(_add(_v, rhs._v)); }
 	finline Zp4 operator-(const Zp4 & rhs) const { return Zp4(_sub(_v, rhs._v)); }
+#ifdef __x86_64
+	finline Zp4 operator*(const Zp & rhs) const { const uint64_t r = rhs.get(); v4x64 lo, hi; _mul(_v, v4x64{r, r, r, r}, lo, hi); return Zp4(_mod(lo, hi)); }
+	finline Zp4 operator*(const Zp2 & rhs) const { const v2x64 r = rhs.get(); v4x64 lo, hi; _mul(_v, v4x64{r[0], r[0], r[1], r[1]}, lo, hi); return Zp4(_mod(lo, hi)); }
+	finline Zp4 operator*(const Zp4 & rhs) const { v4x64 lo, hi; _mul(_v, rhs._v, lo, hi); return Zp4(_mod(lo, hi)); }
+	finline Zp4 mul_w(const Zp & w) const
+	{
+		const uint64_t r = w.get(), mr = (r != 0) ? Zp::p - r : 0;
+		v4x64 lo, hi; _mul(_v, v4x64{r, 1, mr, 1}, lo, hi); return Zp4(_mod(lo, hi)); }
+#else
 	finline Zp4 operator*(const Zp & rhs) const { v4x64 lo, hi; _mul1(_v, rhs.get(), lo, hi); return Zp4(_mod(lo, hi)); }
 	finline Zp4 operator*(const Zp2 & rhs) const { v4x64 lo, hi; _mul2(_v, rhs.get(), lo, hi); return Zp4(_mod(lo, hi)); }
 	finline Zp4 operator*(const Zp4 & rhs) const { v4x64 lo, hi; _mul4(_v, rhs._v, lo, hi); return Zp4(_mod(lo, hi)); }
-
 	// * (w, 1, -w, 1)
 	finline Zp4 mul_w(const Zp & w) const { v4x64 lo, hi; _mulw(_v, w.get(), lo, hi); return Zp4(_mod(lo, hi)); }
+#endif
 
 	finline Zp4 mul_i() const { return Zp4(_mod(_v << 48, _v >> (64 - 48))); }
 	finline Zp4 mul_sqrt_i() const { return Zp4(_mod(_v << 24, _v >> (64 - 24))); }
