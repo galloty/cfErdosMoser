@@ -13,13 +13,15 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <vector>
 #include <set>
 
-#if defined(_WIN32)
+#ifdef _WIN32
 #include <Windows.h>
 #else
 #include <signal.h>
 #endif
 
 #include "CF.h"
+
+#include <gmp.h>
 
 class Application
 {
@@ -28,14 +30,14 @@ private:
 
 	static void quit(int) { CF::get_instance().quit(); }
 
-#if defined(_WIN32)
+#ifdef _WIN32
 	static BOOL WINAPI HandlerRoutine(DWORD) { quit(1); return TRUE; }
 #endif
 
 public:
 	Application()
 	{
-#if defined(_WIN32)
+#ifdef _WIN32
 		SetConsoleCtrlHandler(HandlerRoutine, TRUE);
 #else
 		signal(SIGTERM, quit);
@@ -91,6 +93,7 @@ private:
 		ss << "Usage: cfErdosMoser <N> [-v]" << std::endl;
 		ss << "  N: compute the regular continued fraction of log(2)/(2N)," << std::endl;
 		ss << "     if N = 0 then check N = 1, 2, 2^2, ..., 2^8, 2^8*3, ..." << std::endl;
+		ss << " -t <n>: number of threads (default: 4 threads, 0: all logical cores)," << std::endl;
 		ss << " -v: verbose mode." << std::endl;
 		return ss.str();
 	}
@@ -98,14 +101,105 @@ private:
 public:
 	void run(int argc, char * argv[])
 	{
+		// for (size_t z_size = 256; z_size <= (size_t(1) << 32); z_size *= 2)
+		// {
+		// 	int e = ((z_size & (~z_size + 1)) == z_size) ? 0 : 1;	// power of two
+		// 	for (size_t r = z_size; r != 1; r /= 2) ++e;			// z_size <= 2^e
+		// 	const int ln = e + 2;									// 64-bit => 16-bit
+		// 	const size_t n = size_t(1) << ln;
+		// 	if (ln > 32) { std::cout << z_size << ": size > 4G" << std::endl; break; }
+
+		// 	// we must have n >= 16 * m_0 and m_0 = 2 * 4^e
+		// 	const size_t m_0 = ((ln / 2) % 2 != 0) ? (size_t(1) << (ln / 2)) : (size_t(1) << (ln / 2 + 1));
+
+		// 	// L1: 32 kB, L2: 256 kB / 2 MB
+		// 	std::cout << z_size << ": " << ln << ", n = " << n << ", m_0 = " << m_0 << ", n / m_0 = " << n / m_0 <<
+		// 		", m_0 size: " << m_0 * sizeof(Zp4) << std::endl;
+		// }
+		// return;
+
+		// srand(time(nullptr));
+		// for (size_t n = 7; n <= 20000000; n *= 2)
+		// {
+		// 	const size_t x_size = n, y_size = 2 * n / 3, z_size = x_size + y_size;
+		// 	uint64_t * const x = new uint64_t[x_size];
+		// 	uint64_t * const y = new uint64_t[y_size];
+		// 	uint64_t * const z = new uint64_t[z_size];
+		// 	uint64_t * const zr = new uint64_t[z_size];
+		// 	Zp a = Zp(uint64_t(rand()));
+		// 	for (size_t i = 0; i < x_size; ++i) { x[i] = a.get(); a *= Zp(55); }
+		// 	for (size_t i = 0; i < y_size; ++i) { y[i] = a.get(); a *= Zp(55); }
+		// 	for (size_t i = 0; i < z_size; ++i) z[i] = 0;
+		// 	for (size_t i = 0; i < z_size; ++i) zr[i] = 0;
+
+		// 	const size_t count = std::max(2000000 / n, size_t(1));
+
+		// 	const auto tg = std::chrono::high_resolution_clock::now();
+		// 	for (size_t i = 0; i < count; ++i) mpn_mul(mp_ptr(zr), mp_srcptr(x), mp_size_t(x_size), mp_srcptr(y), mp_size_t(y_size));
+		// 	const double elapsed_time_g = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - tg).count();
+
+		// 	double elapsed_time_s = 0;
+		// 	if (n < 4000)
+		// 	{
+		// 		const auto ts = std::chrono::high_resolution_clock::now();
+		// 		for (size_t i = 0; i < count; ++i) smul(z, x, x_size, y, y_size);
+		// 		elapsed_time_s = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - ts).count();
+		// 		for (size_t i = 0; i < z_size; ++i) if (z[i] != zr[i]) std::cout << "Error!" << std::endl;
+		// 	}
+
+		// 	double elapsed_time_f = 0;
+		// 	if (n > 128)
+		// 	{
+		// 		const auto tf = std::chrono::high_resolution_clock::now();
+		// 		FastMul & fmul = FastMul::get_instance();
+		// 		fmul.set_nthreads(4);
+		// 		for (size_t i = 0; i < count; ++i)
+		// 		{
+		// 			fmul.init(z_size);
+		// 			fmul.set_y(y, y_size);
+		// 			fmul.mul_xy(x, x_size);
+		// 			fmul.get_z(z, z_size);
+		// 		}
+		// 		elapsed_time_f = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - tf).count();
+		// 		for (size_t i = 0; i < z_size; ++i) if (z[i] != zr[i]) std::cout << "Error!" << std::endl;
+		// 	}
+
+		// 	delete[] x;
+		// 	delete[] y;
+		// 	delete[] z;
+		// 	delete[] zr;
+
+		// 	std::cout << n << ", count: " << count << ", s: " << elapsed_time_s / elapsed_time_g << ", f: " << elapsed_time_f / elapsed_time_g
+		// 			<< ", "<< elapsed_time_g << std::endl;
+		// }
+		// return;
+
 		std::cout << header();
 		if (argc < 2) std::cout << usage() << std::endl;
 
-		const std::string arg1((argc > 1) ? argv[1] : "6912"), arg2((argc > 2) ? argv[2] : "");	// 2304, 6912
-		const bool verbose = true;	//(arg2 == "-v");
+		const std::string arg1((argc > 1) ? argv[1] : "6912");
+
+		int nthreads = 4;
+		bool verbose = true;
+
+		std::vector<std::string> args;
+		for (int i = 1; i < argc; ++i) args.push_back(argv[i]);
+
+		for (size_t i = 1, size = args.size(); i < size; ++i)
+		{
+			const std::string & arg = args[i];
+
+			if (arg.substr(0, 2) == "-t")
+			{
+				const std::string ntstr = ((arg == "-t") && (i + 1 < size)) ? args[++i] : arg.substr(2);
+				nthreads = std::atoi(ntstr.c_str());
+			}
+			if (arg == "-v") verbose = true;
+		}
 
 		CF & cf = CF::get_instance();
 		cf.set_verbose(verbose);
+		cf.set_nthreads(nthreads);
 
 		guint N; N.from_string(arg1);
 		if (!N.is_zero())

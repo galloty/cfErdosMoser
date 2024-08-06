@@ -9,6 +9,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <cstdint>
 #include <stdexcept>
+#include <omp.h>
 
 #include "mod64.h"
 #include "heap.h"
@@ -16,6 +17,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 class FastMul
 {
 private:
+	unsigned int _nthreads;
 	int _ln;
 	size_t _m_0, _ni_4;
 	size_t _wsize, _xsize;
@@ -28,7 +30,7 @@ private:
 	struct deleter { void operator()(const FastMul * const p) { delete p; } };
 
 public:
-	FastMul() : _ln(0), _m_0(0), _ni_4(0), _wsize(0), _xsize(0), _w(nullptr), _wi(nullptr), _x(nullptr), _y(nullptr) {}
+	FastMul() : _nthreads(1), _ln(0), _m_0(0), _ni_4(0), _wsize(0), _xsize(0), _w(nullptr), _wi(nullptr), _x(nullptr), _y(nullptr) {}
 	virtual ~FastMul() { free(); }
 
 	static FastMul & get_instance()
@@ -72,21 +74,21 @@ private:
 		_y = static_cast<Zp4 *>(heap.alloc_fmul(_xsize * sizeof(Zp4)));
 	}
 
-	finline static void _vforward4(Zp4 * const x, const size_t m, const Zp & w_1, const Zp & w_2, const Zp & w_3)
+	finline static void forward4(Zp4 * const x, const size_t m, const Zp & w_1, const Zp & w_2, const Zp & w_3)
 	{
 		const Zp4 u0 = x[0 * m], u2 = x[2 * m] * w_1, u1 = x[1 * m], u3 = x[3 * m] * w_1;
 		const Zp4 v0 = u0 + u2, v2 = u0 - u2, v1 = (u1 + u3) * w_2, v3 = (u1 - u3) * w_3;
 		x[0 * m] = v0 + v1; x[1 * m] = v0 - v1; x[2 * m] = v2 + v3; x[3 * m] = v2 - v3;
 	}
 
-	finline static void _vbackward4(Zp4 * const x, const size_t m, const Zp & wi_1, const Zp & wi_2, const Zp & wi_3)
+	finline static void backward4(Zp4 * const x, const size_t m, const Zp & wi_1, const Zp & wi_2, const Zp & wi_3)
 	{
 		const Zp4 u0 = x[0 * m], u1 = x[1 * m], u2 = x[2 * m], u3 = x[3 * m];
 		const Zp4 v0 = u0 + u1, v1 = (u0 - u1) * wi_2, v2 = u2 + u3, v3 = (u2 - u3) * wi_3;
 		x[0 * m] = v0 + v2; x[2 * m] = (v0 - v2) * wi_1; x[1 * m] = v1 + v3; x[3 * m] = (v1 - v3) * wi_1;
 	}
 
-	finline static void _vforward4v2(Zp4 * const x, const Zp2 & w_1, const Zp2 & w_2, const Zp2 & w_3)
+	finline static void forward4v2(Zp4 * const x, const Zp2 & w_1, const Zp2 & w_2, const Zp2 & w_3)
 	{
 		Zp4::shuffle2in(x);
 		const Zp4 u0 = x[0], u2 = x[2] * w_1, u1 = x[1], u3 = x[3] * w_1;
@@ -95,7 +97,7 @@ private:
 		Zp4::shuffle2out(x);
 	}
 
-	finline static void _vbackward4v2(Zp4 * const x, const Zp2 & wi_1, const Zp2 & wi_2, const Zp2 & wi_3)
+	finline static void backward4v2(Zp4 * const x, const Zp2 & wi_1, const Zp2 & wi_2, const Zp2 & wi_3)
 	{
 		Zp4::shuffle2in(x);
 		const Zp4 u0 = x[0], u1 = x[1], u2 = x[2], u3 = x[3];
@@ -104,21 +106,21 @@ private:
 		Zp4::shuffle2out(x);
 	}
 
-	finline static void _vforward4_0(Zp4 * const x, const size_t m)
+	finline static void forward4_0(Zp4 * const x, const size_t m)
 	{
 		const Zp4 u0 = x[0 * m], u2 = x[2 * m], u1 = x[1 * m], u3 = x[3 * m];
 		const Zp4 v0 = u0 + u2, v2 = u0 - u2, v1 = u1 + u3, v3 = Zp4(u1 - u3).mul_i();
 		x[0 * m] = v0 + v1; x[1 * m] = v0 - v1; x[2 * m] = v2 + v3; x[3 * m] = v2 - v3;
 	}
 
-	finline static void _vbackward4_0(Zp4 * const x, const size_t m)
+	finline static void backward4_0(Zp4 * const x, const size_t m)
 	{
 		const Zp4 u0 = x[0 * m], u1 = x[1 * m], u2 = x[2 * m], u3 = x[3 * m];
 		const Zp4 v0 = u0 + u1, v1 = u0 - u1, v2 = u2 + u3, v3 = Zp4(u3 - u2).mul_i();
 		x[0 * m] = v0 + v2; x[2 * m] = v0 - v2; x[1 * m] = v1 + v3; x[3 * m] = v1 - v3;
 	}
 
-	finline static void _vforward8_0(Zp4 * const x, const size_t m)
+	finline static void forward8_0(Zp4 * const x, const size_t m)
 	{
 		const Zp4 u0 = x[0 * m], u4 = x[4 * m], u2 = x[2 * m], u6 = x[6 * m];
 		const Zp4 v0 = u0 + u4, v4 = u0 - u4, v2 = u2 + u6, v6 = Zp4(u2 - u6).mul_i();
@@ -130,7 +132,7 @@ private:
 		x[4 * m] = s4 + s5; x[5 * m] = s4 - s5; x[6 * m] = s6 + s7; x[7 * m] = s6 - s7;
 	}
 
-	finline static void _vbackward8_0(Zp4 * const x, const size_t m)
+	finline static void backward8_0(Zp4 * const x, const size_t m)
 	{
 		const Zp4 u0 = x[0 * m], u1 = x[1 * m], u2 = x[2 * m], u3 = x[3 * m];
 		const Zp4 v0 = u0 + u1, v1 = u0 - u1, v2 = u2 + u3, v3 = Zp4(u3 - u2).mul_i();
@@ -142,7 +144,7 @@ private:
 		x[1 * m] = s1 + s5; x[5 * m] = s1 - s5; x[3 * m] = s3 + s7; x[7 * m] = s3 - s7;
 	}
 
-	finline static void _mul4(Zp4 & x, const Zp4 & y, const Zp & w_1)
+	finline static void mul4(Zp4 & x, const Zp4 & y, const Zp & w_1)
 	{
 		// const Zp u0 = x[0], u1 = x[1], u2 = x[2], u3 = x[3], u0p = y[0], u1p = y[1], u2p = y[2], u3p = y[3];
 		// const Zp v0 = u0 * u0p + w_1 * u1 * u1p, v1 = u0 * u1p + u1 * u0p;
@@ -157,132 +159,154 @@ private:
 		x = e + op;
 	}
 
-	void forward(const bool is_y = false)
+	finline static void forward4_j(Zp4 * const x, const size_t m, const size_t i_m0, const size_t i_s, const Zp & w_1, const Zp & w_2, const Zp & w_3)
 	{
-		const int ln = _ln; const size_t n = size_t(1) << ln;
+		for (size_t i_m = i_m0; i_m < m; i_m += i_s)
+		{
+			for (size_t i = 0; i < 2; ++i) forward4(&x[i_m + i], m, w_1, w_2, w_3);	// Cache line size is 64 bytes
+		}
+	}
+
+	finline static void backward4_j(Zp4 * const x, const size_t m, const size_t i_m0, const size_t i_s, const Zp & w_1, const Zp & w_2, const Zp & w_3)
+	{
+		for (size_t i_m = i_m0; i_m < m; i_m += i_s)
+		{
+			for (size_t i = 0; i < 2; ++i) backward4(&x[i_m + i], m, w_1, w_2, w_3);
+		}
+	}
+
+	finline static void forward4_0_j(Zp4 * const x, const size_t m, const size_t i_m0, const size_t i_s)
+	{
+		for (size_t i_m = i_m0; i_m < m; i_m += i_s)
+		{
+			for (size_t i = 0; i < 2; ++i) forward4_0(&x[i_m + i], m);
+		}
+	}
+
+	finline static void backward4_0_j(Zp4 * const x, const size_t m, const size_t i_m0, const size_t i_s)
+	{
+		for (size_t i_m = i_m0; i_m < m; i_m += i_s)
+		{
+			for (size_t i = 0; i < 2; ++i) backward4_0(&x[i_m + i], m);
+		}
+	}
+
+	finline static void forward8_0_j(Zp4 * const x, const size_t m, const size_t i_m0, const size_t i_s)
+	{
+		for (size_t i_m = i_m0; i_m < m; i_m += i_s)
+		{
+			for (size_t i = 0; i < 2; ++i) forward8_0(&x[i_m + i], m);
+		}
+	}
+
+	finline static void backward8_0_j(Zp4 * const x, const size_t m, const size_t i_m0, const size_t i_s)
+	{
+		for (size_t i_m = i_m0; i_m < m; i_m += i_s)
+		{
+			for (size_t i = 0; i < 2; ++i) backward8_0(&x[i_m + i], m);
+		}
+	}
+
+	void forward_out_mt(Zp4 * const x, const unsigned int thread_id)
+	{
+		const unsigned int nthreads = _nthreads;
+		const int ln = _ln;
 		const size_t m_0 = _m_0, mi_0 = m_0 + _index_gap, ni_4 = _ni_4;
-		Zp4 * const x = is_y ? _y : _x;
 		const Zp * const w = _w;
 
+		const size_t i_t_min = thread_id * (m_0 / 2) / nthreads, i_t_max = (thread_id + 1 == nthreads) ? (m_0 / 2) : (thread_id + 1) * (m_0 / 2) / nthreads;
+
 		// n / (2 * m_0) Zp4 each step
-		for (size_t i_t = 0; i_t < m_0 / 2; ++i_t)
+		for (size_t i_t = i_t_min; i_t < i_t_max; ++i_t)
 		{
-			if (ln % 2 == 0)
-			{
-				for (size_t i_m = 2 * i_t, mi = ni_4 / 8; i_m < mi; i_m += mi_0)
-				{
-					for (size_t i = 0; i < 2; ++i) _vforward8_0(&x[i_m + i], mi);
-				}
-			}
-			else
-			{
-				for (size_t i_m = 2 * i_t, mi = ni_4 / 4; i_m < mi; i_m += mi_0)
-				{
-					for (size_t i = 0; i < 2; ++i) _vforward4_0(&x[i_m + i], mi);
-				}
-			}
+			if (ln % 2 == 0) forward8_0_j(x, ni_4 / 8, 2 * i_t, mi_0); else forward4_0_j(x, ni_4 / 4, 2 * i_t, mi_0);
 
 			for (size_t s = (ln % 2 == 0) ? 8 : 4, mi = ni_4 / (4 * s); mi >= mi_0; mi /= 4, s *= 4)
 			{
-				for (size_t i_m = 2 * i_t; i_m < mi; i_m += mi_0)
-				{
-					for (size_t i = 0; i < 2; ++i) _vforward4_0(&x[i_m + i], mi);
-				}
+				forward4_0_j(x, mi, 2 * i_t, mi_0);
 
 				for (size_t j = 1; j < s; ++j)
 				{
 					const Zp w_1 = w[j], w_2 = w[2 * j + 0], w_3 = w[2 * j + 1];	// w_1 = w_2 * w_2, w_3 = w_2.mul_i()
-
-					for (size_t i_m = 2 * i_t; i_m < mi; i_m += mi_0)
-					{
-						for (size_t i = 0; i < 2; ++i) _vforward4(&x[4 * mi * j + i_m + i], mi, w_1, w_2, w_3);
-					}
-				}
-			}
-		}
-
-		if (is_y)
-		{
-			for (size_t j_t = 0, s_0 = n / 4 / m_0; j_t < s_0; ++j_t)
-			{
-				Zp4 * const xt = &x[(m_0 + _index_gap) * j_t];
-
-				for (size_t m = m_0 / 4, s = 1; m >= 2; m /= 4, s *= 4)
-				{
-					for (size_t j_s = 0; j_s < s; ++j_s)
-					{
-						const size_t j = j_t * s + j_s;
-						const Zp w_1 = w[j], w_2 = w[2 * j + 0], w_3 = w[2 * j + 1];
-						for (size_t i = 0; i < m; ++i) _vforward4(&xt[4 * m * j_s + i], m, w_1, w_2, w_3);
-					}
-				}
-
-				for (size_t j_s = 0, s = m_0 / 4; j_s < s; ++j_s)
-				{
-					const size_t j = j_t * s + j_s;
-					const Zp2 w_1 = Zp2(w[2 * j + 0], w[2 * j + 1]), w_2 = Zp2(w[4 * j + 0], w[4 * j + 2]), w_3 = Zp2(w[4 * j + 1], w[4 * j + 3]);
-					_vforward4v2(&xt[4 * j_s], w_1, w_2, w_3);
+					forward4_j(&x[4 * mi * j], mi, 2 * i_t, mi_0, w_1, w_2, w_3);
 				}
 			}
 		}
 	}
 
-	void backward()
+	void backward_out_mt(Zp4 * const x, const unsigned int thread_id)
 	{
+		const unsigned int nthreads = _nthreads;
 		const int ln = _ln; const size_t n = size_t(1) << ln;
 		const size_t m_0 = _m_0, mi_0 = m_0 + _index_gap, ni_4 = _ni_4;
-		Zp4 * const x = _x;
 		const Zp * const wi = _wi;
 
+		const size_t i_t_min = thread_id * (m_0 / 2) / nthreads, i_t_max = (thread_id + 1 == nthreads) ? (m_0 / 2) : (thread_id + 1) * (m_0 / 2) / nthreads;
+
 		// n / (2 * m_0) Zp4 each step
-		for (size_t i_t = 0; i_t < 4 * m_0 / 8; ++i_t)
+		for (size_t i_t = i_t_min; i_t < i_t_max; ++i_t)
 		{
 			for (size_t s = n / 16 / m_0, mi = mi_0; mi <= ni_4 / 16; mi *= 4, s /= 4)
 			{
-				for (size_t i_m = 2 * i_t; i_m < mi; i_m += mi_0)
-				{
-					for (size_t i = 0; i < 2; ++i) _vbackward4_0(&x[i_m + i], mi);
-				}
+				backward4_0_j(x, mi, 2 * i_t, mi_0);
 
 				for (size_t j = 1; j < s; ++j)
 				{
 					const Zp wi_1 = wi[j], wi_2 = wi[2 * j + 0], wi_3 = wi[2 * j + 1];
-
-					for (size_t i_m = 2 * i_t; i_m < mi; i_m += mi_0)
-					{
-						for (size_t i = 0; i < 2; ++i) _vbackward4(&x[4 * mi * j + i_m + i], mi, wi_1, wi_2, wi_3);
-					}
+					backward4_j(&x[4 * mi * j], mi, 2 * i_t, mi_0, wi_1, wi_2, wi_3);
 				}
 			}
 
-			if (ln % 2 == 0)
+			if (ln % 2 == 0) backward8_0_j(x, ni_4 / 8, 2 * i_t, mi_0); else backward4_0_j(x, ni_4 / 4, 2 * i_t, mi_0);
+		}
+	}
+
+	void forward_in_mt(Zp4 * const x, const unsigned int thread_id)
+	{
+		const unsigned int nthreads = _nthreads;
+		const size_t n = size_t(1) << _ln;
+		const size_t m_0 = _m_0;
+		const Zp * const w = _w;
+
+		const size_t s_0 = n / 4 / m_0;
+		const size_t j_t_min = thread_id * s_0 / nthreads, j_t_max = (thread_id + 1 == nthreads) ? s_0 : (thread_id + 1) * s_0 / nthreads;
+
+		for (size_t j_t = j_t_min; j_t < j_t_max; ++j_t)
+		{
+			Zp4 * const xt = &x[(m_0 + _index_gap) * j_t];
+
+			for (size_t m = m_0 / 4, s = 1; m >= 2; m /= 4, s *= 4)
 			{
-				for (size_t i_m = 2 * i_t, mi = ni_4 / 8; i_m < mi; i_m += mi_0)
+				for (size_t j_s = 0; j_s < s; ++j_s)
 				{
-					for (size_t i = 0; i < 2; ++i) _vbackward8_0(&x[i_m + i], mi);
+					const size_t j = j_t * s + j_s;
+					const Zp w_1 = w[j], w_2 = w[2 * j + 0], w_3 = w[2 * j + 1];
+					for (size_t i = 0; i < m; ++i) forward4(&xt[4 * m * j_s + i], m, w_1, w_2, w_3);
 				}
 			}
-			else
+
+			for (size_t j_s = 0, s = m_0 / 4; j_s < s; ++j_s)
 			{
-				for (size_t i_m = 2 * i_t, mi = ni_4 / 4; i_m < mi; i_m += mi_0)
-				{
-					for (size_t i = 0; i < 2; ++i) _vbackward4_0(&x[i_m + i], mi);
-				}
+				const size_t j = j_t * s + j_s;
+				const Zp2 w_1 = Zp2(w[2 * j + 0], w[2 * j + 1]), w_2 = Zp2(w[4 * j + 0], w[4 * j + 2]), w_3 = Zp2(w[4 * j + 1], w[4 * j + 3]);
+				forward4v2(&xt[4 * j_s], w_1, w_2, w_3);
 			}
 		}
 	}
 
-	void mult()
+	void mul_in_mt(Zp4 * const x, const Zp4 * const y, const unsigned int thread_id)
 	{
+		const unsigned int nthreads = _nthreads;
 		const size_t n = size_t(1) << _ln;
 		const size_t m_0 = _m_0;
-		Zp4 * const x = _x;
-		const Zp4 * const y = _y;
 		const Zp * const w = _w;
 		const Zp * const wi = _wi;
 
+		const size_t s_0 = n / 4 / m_0;
+		const size_t j_t_min = thread_id * s_0 / nthreads, j_t_max = (thread_id + 1 == nthreads) ? s_0 : (thread_id + 1) * s_0 / nthreads;
+
 		// m_0 consecutive Zp4 each step
-		for (size_t j_t = 0, s_0 = n / 4 / m_0; j_t < s_0; ++j_t)
+		for (size_t j_t = j_t_min; j_t < j_t_max; ++j_t)
 		{
 			const size_t k_t = (m_0 + _index_gap) * j_t;
 			Zp4 * const xt = &x[k_t];
@@ -293,29 +317,29 @@ private:
 				for (size_t j_s = 0; j_s < s; ++j_s)
 				{
 					const size_t j = j_t * s + j_s;
-					const Zp w_1 = w[j], w_2 = w[2 * j + 0], w_3 = w[2 * j + 1];
-					for (size_t i = 0; i < m; ++i) _vforward4(&xt[4 * m * j_s + i], m, w_1, w_2, w_3);	// w_1 = w_2 * w_2, w_3 = w_2.mul_i()
+					const Zp w_1 = w[j], w_2 = w[2 * j + 0], w_3 = w[2 * j + 1];	// w_1 = w_2 * w_2, w_3 = w_2.mul_i()
+					forward4_j(&xt[4 * m * j_s], m, 0, 2, w_1, w_2, w_3);
 				}
 			}
-
+	
 			for (size_t j_s = 0, s = m_0 / 4; j_s < s; ++j_s)
 			{
 				const size_t j = j_t * s + j_s;
 				const Zp2 w_1 = Zp2(w[2 * j + 0], w[2 * j + 1]), w_2 = Zp2(w[4 * j + 0], w[4 * j + 2]), w_3 = Zp2(w[4 * j + 1], w[4 * j + 3]);
-				_vforward4v2(&xt[4 * j_s], w_1, w_2, w_3);
+				forward4v2(&xt[4 * j_s], w_1, w_2, w_3);
 			}
 
-			for (size_t j_s = 0; j_s < m_0; ++j_s)
+			for (size_t j_s = 0, s = m_0; j_s < s; ++j_s)
 			{
-				const size_t j = m_0 * j_t + j_s;
-				_mul4(xt[j_s], yt[j_s], w[j]);
+				const size_t j = j_t * s + j_s;
+				mul4(xt[j_s], yt[j_s], w[j]);
 			}
 
 			for (size_t j_s = 0, s = m_0 / 4; j_s < s; ++j_s)
 			{
 				const size_t j = j_t * s + j_s;
 				const Zp2 wi_1 = Zp2(wi[2 * j + 0], wi[2 * j + 1]), wi_2 = Zp2(wi[4 * j + 0], wi[4 * j + 2]), wi_3 = Zp2(wi[4 * j + 1], wi[4 * j + 3]);
-				_vbackward4v2(&xt[4 * j_s], wi_1, wi_2, wi_3);
+				backward4v2(&xt[4 * j_s], wi_1, wi_2, wi_3);
 			}
 
 			for (size_t m = 2, s = m_0 / (4 * m); m <= m_0 / 4; m *= 4, s /= 4)
@@ -324,16 +348,63 @@ private:
 				{
 					const size_t j = j_t * s + j_s;
 					const Zp wi_1 = wi[j], wi_2 = wi[2 * j + 0], wi_3 = wi[2 * j + 1];
-					for (size_t i = 0; i < m; ++i) _vbackward4(&xt[4 * m * j_s + i], m, wi_1, wi_2, wi_3);
+					backward4_j(&xt[4 * m * j_s], m, 0, 2, wi_1, wi_2, wi_3);
 				}
 			}
 		}
 	}
 
-	void set(const uint64_t * const d, const size_t d_size, const bool is_y = false)
+	void forward_out(Zp4 * const x)
+	{
+		if (_nthreads > 1)
+		{
+#pragma omp parallel
+			{
+				forward_out_mt(x, (unsigned int)(omp_get_thread_num()));
+			}
+		}
+		else forward_out_mt(x, 0);
+	}
+
+	void backward_out(Zp4 * const x)
+	{
+		if (_nthreads > 1)
+		{
+#pragma omp parallel
+			{
+				backward_out_mt(x, (unsigned int)(omp_get_thread_num()));
+			}
+		}
+		else backward_out_mt(x, 0);
+	}
+
+	void forward_in(Zp4 * const x)
+	{
+		if (_nthreads > 1)
+		{
+#pragma omp parallel
+			{
+				forward_in_mt(x, (unsigned int)(omp_get_thread_num()));
+			}
+		}
+		else forward_in_mt(x, 0);
+	}
+
+	void mul_in(Zp4 * const x, const Zp4 * const y)
+	{
+		if (_nthreads > 1)
+		{
+#pragma omp parallel
+			{
+				mul_in_mt(x, y, (unsigned int)(omp_get_thread_num()));
+			}
+		}
+		else mul_in_mt(x, y, 0);
+	}
+
+	void set(Zp4 * const x, const uint64_t * const d, const size_t d_size)
 	{
 		const size_t m_0 = _m_0, ni_4 = _ni_4;
-		Zp4 * const x = is_y ? _y :_x;
 
 		size_t k = 0, ki = 0, i = 0;
 		while (k < d_size)
@@ -373,6 +444,20 @@ private:
 	}
 
 public:
+	void set_nthreads(const int nthreads)
+	{
+		if (nthreads > 1) omp_set_num_threads(nthreads);
+		_nthreads = 1;
+		if (nthreads != 1)
+		{
+#pragma omp parallel
+			{
+#pragma omp single
+				_nthreads = (unsigned int)(omp_get_num_threads());
+			}
+		}
+	}
+
 	void clear() { free(); }
 
 	// x_size >= y_size >= 129, z_size = x_size + y_size
@@ -406,8 +491,22 @@ public:
 		}
 	}
 
-	void set_x(const uint64_t * const d, const size_t d_size) { set(d, d_size); }
-	void set_y(const uint64_t * const d, const size_t d_size) { set(d, d_size, true); }
-	void get_x(uint64_t * const d, const size_t d_size) { get(d, d_size); }
-	void mul() { forward(); forward(true); mult(); backward(); }
+	void set_y(const uint64_t * const dy, const size_t dy_size)
+	{
+		Zp4 * const y = _y;
+		set(y, dy, dy_size);
+		forward_out(y);
+		forward_in(y);
+	}
+
+	void mul_xy(const uint64_t * const dx, const size_t dx_size)
+	{
+		Zp4 * const x = _x;
+		set(x, dx, dx_size);
+		forward_out(x);
+		mul_in(x, _y);
+		backward_out(x);
+	}
+
+	void get_z(uint64_t * const dz, const size_t dz_size) { get(dz, dz_size); }
 };

@@ -293,10 +293,9 @@ inline void g_mul(uint64_t * const z, const uint64_t * const x, const size_t x_s
 		FastMul & fmul = FastMul::get_instance();
 		const size_t z_size = x_size + y_size;
 		fmul.init(z_size);
-		fmul.set_x(x, x_size);
 		fmul.set_y(y, y_size);
-		fmul.mul();
-		fmul.get_x(z, z_size);
+		fmul.mul_xy(x, x_size);
+		fmul.get_z(z, z_size);
 	}
 
 	// static double max_ratio = 1;

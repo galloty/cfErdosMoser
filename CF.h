@@ -70,6 +70,7 @@ public:
 	}
 
 	void set_verbose(const bool verbose) { _verbose = verbose; }
+	void set_nthreads(const int nthreads) { FastMul::get_instance().set_nthreads(nthreads); }
 
 private:
 	static std::string format_time(const double time)
