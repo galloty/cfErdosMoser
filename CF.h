@@ -85,7 +85,8 @@ private:
 
 	std::string factor(const guint & N)
 	{
-		if (N.cmp(1) == 0) return "1";
+		guint one; one = 1;
+		if (N.cmp(one) == 0) return std::string("1");
 		guint r = N; bool first = true;
 		std::ostringstream ss;
 		for (uint32_t d = 2; d < 1000; ++d)
@@ -96,7 +97,7 @@ private:
 				if (first) first = false; else ss << "*";
 				ss << d; if (e > 1) ss << "^" << e;
 			}
-			if (r.cmp(1) == 0) break;
+			if (r.cmp(one) == 0) break;
 		}
 		return ss.str();
 	}
@@ -382,7 +383,7 @@ private:
 	}
 
 public:
-	void solve(const guint & N)
+	bool solve(const guint & N)
 	{
 		Heap & heap = Heap::get_instance();
 
@@ -519,11 +520,12 @@ public:
 			if (found) found = condition_d();
 
 			M_min_size = M.get_byte_count();
-			if (Mgcf_size < M_min_size / 3) nstep *= 2;
+			if (Mgcf_size < M_min_size / 4) nstep *= 2;
 		}
 
 		_N.clear(); _cond_b.clear(); _a_j.clear(); M.clear();
 		FastMul::get_instance().clear(); heap.reset();
 		if (_verbose) std::cout << "Memory size: " << heap.get_memory_size() << "." << std::endl;
+		return !_quit;
 	}
 };

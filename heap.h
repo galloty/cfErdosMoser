@@ -75,9 +75,9 @@ private:
 
 	static void get_unit(const size_t size, size_t & divisor, std::string & unit)
 	{
-		if (size < (size_t(10) << 10)) { divisor = 1; unit = "B"; }
-		else if (size < (size_t(10) << 20)) { divisor = size_t(1) << 10; unit = "kB"; }
-		else if (size < (size_t(10) << 30)) { divisor = size_t(1) << 20; unit = "MB"; }
+		if (size < (size_t(100) << 10)) { divisor = 1; unit = "B"; }
+		else if (size < (size_t(100) << 20)) { divisor = size_t(1) << 10; unit = "kB"; }
+		else if (size < (size_t(100) << 30)) { divisor = size_t(1) << 20; unit = "MB"; }
 		else { divisor = size_t(1) << 30; unit = "GB"; }
 	}
 

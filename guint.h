@@ -269,22 +269,29 @@ public:
 		_set_size(zsize);
 		uint64_t * const d = _d;
 
+		FastMul & fmul = FastMul::get_instance();
+		const size_t fmin_size = fmul.get_min_size();
 		if (ysize == 1) d[zsize - 1] = g_mul_1(d, xd, xsize, yd[0]);
-		else if (zsize < 8192) g_mul(d, xd, xsize, yd, ysize);
+		else if (zsize < fmin_size) g_mul(d, xd, xsize, yd, ysize);
 		else
 		{
-			if (xsize < 2 * ysize) { f_mul_set_y(zsize, yd, ysize); f_mul(d, zsize, xd, xsize); }
+			if (xsize < 2 * ysize)
+			{
+				fmul.init(zsize); fmul.set_y(yd, ysize);
+				fmul.mul_xy(xd, xsize); fmul.get_z(d, zsize);
+			}
 			else
 			{
 				const size_t n = xsize / ysize, n_r = xsize % ysize;	// n >= 2
 				guint t(2 * ysize), c(ysize);
 				uint64_t * const td = t._d; uint64_t * const cd = c._d;
-				if (ysize >= 4096) f_mul_set_y(2 * ysize, yd, ysize);
+				const bool bfmul = (ysize >= fmin_size / 2);
+				if (bfmul) { fmul.init(2 * ysize); fmul.set_y(yd, ysize); }
 
 				g_zero(cd, ysize);
 				for (size_t i = 0; i < n; ++i)
 				{
-					if (ysize >= 4096) f_mul(td, 2 * ysize, &xd[i * ysize], ysize);
+					if (bfmul) { fmul.mul_xy(&xd[i * ysize], ysize); fmul.get_z(td, 2 * ysize); }
 					else g_mul(td, yd, ysize, &xd[i * ysize], ysize);
 					const uint64_t carry = g_add(&d[i * ysize], td, ysize, cd, ysize);
 					g_copy(cd, &td[ysize], ysize);
@@ -292,7 +299,7 @@ public:
 				}
 				if (n_r > 0)
 				{
-					if (ysize >= 4096) f_mul(td, 2 * ysize, &xd[n * ysize], n_r);
+					if (bfmul) { fmul.mul_xy(&xd[n * ysize], n_r); fmul.get_z(td, 2 * ysize); }
 					else g_mul(td, yd, ysize, &xd[n * ysize], n_r);
 					g_add(&d[n * ysize], td, ysize + n_r, cd, ysize);
 				}
@@ -314,9 +321,10 @@ public:
 		_set_size(zsize);
 		uint64_t * const d = _d;
 
+		FastMul & fmul = FastMul::get_instance();
 		if (xsize == 1) d[zsize - 1] = g_mul_1(d, xd, xsize, xd[0]);
-		else if (zsize < 8192) g_sqr(d, xd, xsize);
-		else f_sqr(d, xd, xsize);
+		else if (zsize < fmul.get_min_size()) g_sqr(d, xd, xsize);
+		else { fmul.init(2 * xsize); fmul.sqr(xd, xsize); fmul.get_z(d, 2 * xsize); }
 
 		if (d[zsize - 1] == 0) _set_size(zsize - 1);
 		return *this;

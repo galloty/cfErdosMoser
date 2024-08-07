@@ -351,6 +351,79 @@ private:
 		}
 	}
 
+	void mul(Zp4 * const x, const Zp4 * const y)
+	{
+		const int ln = _ln; const size_t n = size_t(1) << ln;
+		const Zp * const w = _w;
+		const Zp * const wi = _wi;
+
+		const size_t s_0 = (ln % 2 == 0) ? 8 : 4, m_0 = n / 4 / s_0;
+
+		if (ln % 2 == 0) forward8_0_j(x, m_0, 0, 2); else forward4_0_j(x, m_0, 0, 2);
+
+		for (size_t m = m_0 / 4, s = s_0; m >= 2; m /= 4, s *= 4)
+		{
+			for (size_t j = 0; j < s; ++j)
+			{
+				const Zp w_1 = w[j], w_2 = w[2 * j + 0], w_3 = w[2 * j + 1];	// w_1 = w_2 * w_2, w_3 = w_2.mul_i()
+				forward4_j(&x[4 * m * j], m, 0, 2, w_1, w_2, w_3);
+			}
+		}
+
+		for (size_t j = 0; j < n / 16; ++j)
+		{
+			const Zp2 w_1 = Zp2(w[2 * j + 0], w[2 * j + 1]), w_2 = Zp2(w[4 * j + 0], w[4 * j + 2]), w_3 = Zp2(w[4 * j + 1], w[4 * j + 3]);
+			forward4v2(&x[4 * j], w_1, w_2, w_3);
+		}
+
+		for (size_t j = 0; j < n / 4; ++j)
+		{
+			mul4(x[j], y[j], w[j]);
+		}
+
+		for (size_t j = 0; j < n / 16; ++j)
+		{
+			const Zp2 wi_1 = Zp2(wi[2 * j + 0], wi[2 * j + 1]), wi_2 = Zp2(wi[4 * j + 0], wi[4 * j + 2]), wi_3 = Zp2(wi[4 * j + 1], wi[4 * j + 3]);
+			backward4v2(&x[4 * j], wi_1, wi_2, wi_3);
+		}
+
+		for (size_t m = 2, s = n / 4 / (4 * m); m <= m_0 / 4; m *= 4, s /= 4)
+		{
+			for (size_t j = 0; j < s; ++j)
+			{
+				const Zp wi_1 = wi[j], wi_2 = wi[2 * j + 0], wi_3 = wi[2 * j + 1];
+				backward4_j(&x[4 * m * j], m, 0, 2, wi_1, wi_2, wi_3);
+			}
+		}
+
+		if (ln % 2 == 0) backward8_0_j(x, n / 4 / 8, 0, 2); else backward4_0_j(x, n / 4 / 4, 0, 2);
+	}
+
+	void forward(Zp4 * const x)
+	{
+		const int ln = _ln; const size_t n = size_t(1) << ln;
+		const Zp * const w = _w;
+
+		const size_t s_0 = (ln % 2 == 0) ? 8 : 4, m_0 = n / 4 / s_0;
+
+		if (ln % 2 == 0) forward8_0_j(x, m_0, 0, 2); else forward4_0_j(x, m_0, 0, 2);
+
+		for (size_t m = m_0 / 4, s = s_0; m >= 2; m /= 4, s *= 4)
+		{
+			for (size_t j = 0; j < s; ++j)
+			{
+				const Zp w_1 = w[j], w_2 = w[2 * j + 0], w_3 = w[2 * j + 1];	// w_1 = w_2 * w_2, w_3 = w_2.mul_i()
+				forward4_j(&x[4 * m * j], m, 0, 2, w_1, w_2, w_3);
+			}
+		}
+
+		for (size_t j = 0; j < n / 16; ++j)
+		{
+			const Zp2 w_1 = Zp2(w[2 * j + 0], w[2 * j + 1]), w_2 = Zp2(w[4 * j + 0], w[4 * j + 2]), w_3 = Zp2(w[4 * j + 1], w[4 * j + 3]);
+			forward4v2(&x[4 * j], w_1, w_2, w_3);
+		}
+	}
+
 	void forward_out(Zp4 * const x)
 	{
 		if ((_ln >= 14) && (_nthreads > 1))
@@ -455,6 +528,7 @@ public:
 		}
 	}
 
+	size_t get_min_size() const { return (_nthreads == 1) ? (size_t(1) << 31) : 8192; }
 	void clear() { free(); }
 
 	// x_size >= y_size >= 129, z_size = x_size + y_size
@@ -492,26 +566,21 @@ public:
 	{
 		Zp4 * const y = _y;
 		set(y, dy, dy_size);
-		forward_out(y);
-		forward_in(y);
+		if (_m_0 != size_t(-1)) { forward_out(y); forward_in(y); } else forward(y);
 	}
 
 	void mul_xy(const uint64_t * const dx, const size_t dx_size)
 	{
 		Zp4 * const x = _x;
 		set(x, dx, dx_size);
-		forward_out(x);
-		mul_in(x, _y);
-		backward_out(x);
+		if (_m_0 != size_t(-1)) { forward_out(x); mul_in(x, _y); backward_out(x); } else mul(x, _y);
 	}
 
 	void sqr(const uint64_t * const dx, const size_t dx_size)
 	{
 		Zp4 * const x = _x;
 		set(x, dx, dx_size);
-		forward_out(x);
-		mul_in(x, x);
-		backward_out(x);
+		if (_m_0 != size_t(-1)) { forward_out(x); mul_in(x, x); backward_out(x); } else mul(x, x);
 	}
 
 	void get_z(uint64_t * const dz, const size_t dz_size) { get(dz, dz_size); }

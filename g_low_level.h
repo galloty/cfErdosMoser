@@ -235,79 +235,16 @@ inline void g_sub(uint64_t * const z, const uint64_t * const x, const size_t x_s
 #endif
 }
 
-#ifndef GMP_MPN
-// x_size >= y_size >= 2
-inline void smul(uint64_t * const z, const uint64_t * const x, const size_t x_size, const uint64_t * const y, const size_t y_size)
-{
-	uint64_t carry0 = 0, carry1 = 0, t = 0;
-	for (size_t j = 0; j < y_size; ++j)
-	{
-		z[j + 0] = _madc(x[0], y[j], t, carry0);
-		t = _mulc(x[1], y[j], carry1);
-	}
-	z[y_size + 0] = _addc(t, 0, carry0);
-	z[y_size + 1] = carry0 + carry1;
-
-	for (size_t i = 2; i < x_size - 1; i += 2)
-	{
-		z[i + y_size] = 0;
-
-		uint64_t carry0 = 0, carry1 = 0, t = z[i];
-		for (size_t j = 0; j < y_size; ++j)
-		{
-			z[i + j + 0] = _madc(x[i + 0], y[j], t, carry0);
-			t = _madc(x[i + 1], y[j], z[i + j + 1], carry1);
-		}
-		z[i + y_size + 0] = _addc(t, 0, carry0);
-		z[i + y_size + 1] = carry0 + carry1;
-	}
-
-	if (x_size % 2 != 0)
-	{
-		uint64_t i = x_size - 1, carry = 0;
-		for (size_t j = 0; j < y_size; ++j)
-		{
-			z[i + j] = _madc(x[i], y[j], z[i + j], carry);
-		}
-		z[i + y_size] = carry;
-	}
-}
-#endif
-
-// x_size >= y_size > 0, z_size = x_size + y_size < 8192
+// x_size >= y_size > 0, z_size = x_size + y_size
 inline void g_mul(uint64_t * const z, const uint64_t * const x, const size_t x_size, const uint64_t * const y, const size_t y_size)
 {
 	mpn_mul(mp_ptr(z), mp_srcptr(x), mp_size_t(x_size), mp_srcptr(y), mp_size_t(y_size));
 }
 
-// x_size >= y_size > 0, z_size = x_size + y_size >= 8192
-inline void f_mul_set_y(const size_t z_size, const uint64_t * const y, const size_t y_size)
-{
-	FastMul & fmul = FastMul::get_instance();
-	fmul.init(z_size);
-	fmul.set_y(y, y_size);
-}
-
-inline void f_mul(uint64_t * const z, const size_t z_size, const uint64_t * const x, const size_t x_size)
-{
-	FastMul & fmul = FastMul::get_instance();
-	fmul.mul_xy(x, x_size);
-	fmul.get_z(z, z_size);
-}
-
-// size > 0, z_size = 2 * x_size < 8192
+// size > 0, z_size = 2 * x_size
 inline void g_sqr(uint64_t * const z, const uint64_t * const x, const size_t size)
 {
 	mpn_sqr(mp_ptr(z), mp_srcptr(x), mp_size_t(size));
-}
-
-// size > 0, z_size = 2 * x_size >= 8192
-inline void f_sqr(uint64_t * const z, const uint64_t * const x, const size_t size)
-{
-	FastMul & fmul = FastMul::get_instance();
-	fmul.init(2 * size);
-	fmul.sqr(x, size);
-	fmul.get_z(z, 2 * size);
 }
 
 inline void g_get_str(char * const str, const uint64_t * const x, const size_t size)
