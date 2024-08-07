@@ -14,6 +14,8 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <sstream>
 #include <queue>
 
+#include <gmp.h>
+
 #include "mod64.h"
 
 // Memory allocation
@@ -21,17 +23,21 @@ class Heap
 {
 private:
 	static const size_t min_size = 64 * 1024 / sizeof(uint64_t);
-	size_t _size, _size_fmul;
+	size_t _size, _size_fmul, _size_gmp;
 	size_t _alloc_count, _realloc_count, _free_count, _block_count;
-	size_t _max_size, _max_block_size, _max_block_count;
+	size_t _max_size, _max_size_gmp, _max_block_size, _max_block_count;
 	std::queue<uint64_t *> _small_block_queue;
 
 private:
 	struct deleter { void operator()(const Heap * const p) { delete p; } };
 
 public:
-	Heap() : _size(0), _size_fmul(0), _alloc_count(0), _realloc_count(0), _free_count(0), _block_count(0), _max_size(0), _max_block_size(0), _max_block_count(0) {}
-	virtual ~Heap() {}
+	Heap() : _size(0), _size_fmul(0), _size_gmp(0), _alloc_count(0), _realloc_count(0), _free_count(0), _block_count(0),
+		_max_size(0), _max_size_gmp(0), _max_block_size(0), _max_block_count(0)
+	{
+		mp_set_memory_functions(_alloc_gmp, _realloc_gmp, _free_gmp);
+	}
+	virtual ~Heap() { mp_set_memory_functions(nullptr, nullptr, nullptr); }
 
 	static Heap & get_instance()
 	{
@@ -73,6 +79,24 @@ private:
 
 	void _free(uint64_t * const ptr) { ++_free_count; std::free(static_cast<void *>(ptr)); }
 
+	static void * _alloc_gmp(size_t size)
+	{
+		auto & me = get_instance();
+		me._size_gmp += size;
+		me._max_size_gmp = std::max(me._max_size_gmp, me._size_gmp);
+		return std::malloc(size);
+	}
+
+	static void * _realloc_gmp(void * ptr, size_t old_size, size_t new_size)
+	{
+		auto & me = get_instance();
+		me._size_gmp += new_size - old_size;
+		me._max_size_gmp = std::max(me._max_size_gmp, me._size_gmp);
+		return std::realloc(ptr, new_size);
+	}
+
+	static void _free_gmp(void * ptr, size_t size) { auto & me = get_instance(); me._size_gmp -= size; if (size > 0) std::free(ptr); }
+
 	static void get_unit(const size_t size, size_t & divisor, std::string & unit)
 	{
 		if (size < (size_t(100) << 10)) { divisor = 1; unit = "B"; }
@@ -93,13 +117,13 @@ public:
 
 	std::string get_memory_size() const
 	{
-		std::ostringstream ss; ss << _size << " + " << _size_fmul << " B";
+		std::ostringstream ss; ss << _size << " + " << _size_fmul << " + " << _size_gmp << " B";
 		return ss.str();
 	}
 
 	std::string get_memory_info() const
 	{
-		const size_t max_size = _max_size * sizeof(uint64_t), size_fmul = _size_fmul;
+		const size_t max_size = _max_size * sizeof(uint64_t), size_fmul = _size_fmul + _max_size_gmp;
 		const size_t max_block_size = _max_block_size * sizeof(uint64_t);
 
 		size_t size_divisor; std::string size_unit; get_unit(std::max(max_size, size_fmul), size_divisor, size_unit);
@@ -115,7 +139,7 @@ public:
 
 	std::string get_memory_usage() const
 	{
-		const size_t max_size = _max_size * sizeof(uint64_t), size_fmul = _size_fmul;
+		const size_t max_size = _max_size * sizeof(uint64_t), size_fmul = _size_fmul + _max_size_gmp;
 		size_t size_divisor; std::string size_unit; get_unit(std::max(max_size, size_fmul), size_divisor, size_unit);
 		std::ostringstream ss; ss << max_size / size_divisor << " + " << size_fmul / size_divisor << " " << size_unit;
 		return ss.str();
@@ -123,7 +147,7 @@ public:
 
 	void reset()
 	{
-		_alloc_count = _realloc_count = _free_count = _block_count = _max_size = _max_block_size = _max_block_count = 0;
+		_alloc_count = _realloc_count = _free_count = _block_count = _max_size = _max_size_gmp = _max_block_size = _max_block_count = 0;
 
 		while (!_small_block_queue.empty())
 		{
