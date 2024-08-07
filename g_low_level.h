@@ -14,9 +14,10 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 // #define GMP_MPN	true	// Must be 64-bit GMP
 
+#include <gmp.h>
+
 #ifdef GMP_MPN
 // Low-level functions are implemented using GMP. On Windows, mpn has limit of 2^(31 + 6) bits (41 billion digits).
-#include <gmp.h>
 #else
 
 #include "mod64.h"
@@ -137,13 +138,13 @@ inline void g_sub_1(uint64_t * const x, const size_t size, const uint64_t n)
 }
 
 // size > 0
-inline uint64_t g_mul_1(uint64_t * const x, const size_t size, const uint64_t n)
+inline uint64_t g_mul_1(uint64_t * const y, const uint64_t * const x, const size_t size, const uint64_t n)
 {
 #ifdef GMP_MPN
-	return (uint64_t)mpn_mul_1(mp_ptr(x), mp_srcptr(x), mp_size_t(size), mp_limb_t(n));
+	return (uint64_t)mpn_mul_1(mp_ptr(y), mp_srcptr(x), mp_size_t(size), mp_limb_t(n));
 #else
 	uint64_t carry = 0;
-	for (size_t i = 0; i < size; ++i) x[i] = _mulc(x[i], n, carry);
+	for (size_t i = 0; i < size; ++i) y[i] = _mulc(x[i], n, carry);
 	return carry;
 #endif
 }
@@ -273,48 +274,40 @@ inline void smul(uint64_t * const z, const uint64_t * const x, const size_t x_si
 }
 #endif
 
-// x_size >= y_size > 0, z_size = x_size + y_size
+// x_size >= y_size > 0, z_size = x_size + y_size < 8192
 inline void g_mul(uint64_t * const z, const uint64_t * const x, const size_t x_size, const uint64_t * const y, const size_t y_size)
 {
-#ifdef GMP_MPN
 	mpn_mul(mp_ptr(z), mp_srcptr(x), mp_size_t(x_size), mp_srcptr(y), mp_size_t(y_size));
-#else
-	if (y_size == 1)
-	{
-		g_copy(z, x, x_size);
-		const uint64_t carry = g_mul_1(z, x_size, y[0]);
-		z[x_size] = carry;
-		return;
-	}
-
-	if (y_size <= 128) smul(z, x, x_size, y, y_size);
-	else
-	{
-		FastMul & fmul = FastMul::get_instance();
-		const size_t z_size = x_size + y_size;
-		fmul.init(z_size);
-		fmul.set_y(y, y_size);
-		fmul.mul_xy(x, x_size);
-		fmul.get_z(z, z_size);
-	}
-
-	// static double max_ratio = 1;
-	// const double ratio = x_size / double(y_size);
-	// if (ratio > max_ratio)
-	// {
-	// 	max_ratio = ratio; std::cout << ratio << std::endl;
-	// }
-#endif
 }
 
-// size > 0, z_size = 2 * x_size
+// x_size >= y_size > 0, z_size = x_size + y_size >= 8192
+inline void f_mul_set_y(const size_t z_size, const uint64_t * const y, const size_t y_size)
+{
+	FastMul & fmul = FastMul::get_instance();
+	fmul.init(z_size);
+	fmul.set_y(y, y_size);
+}
+
+inline void f_mul(uint64_t * const z, const size_t z_size, const uint64_t * const x, const size_t x_size)
+{
+	FastMul & fmul = FastMul::get_instance();
+	fmul.mul_xy(x, x_size);
+	fmul.get_z(z, z_size);
+}
+
+// size > 0, z_size = 2 * x_size < 8192
 inline void g_sqr(uint64_t * const z, const uint64_t * const x, const size_t size)
 {
-#ifdef GMP_MPN
 	mpn_sqr(mp_ptr(z), mp_srcptr(x), mp_size_t(size));
-#else
-	g_mul(z, x, size, x, size);
-#endif
+}
+
+// size > 0, z_size = 2 * x_size >= 8192
+inline void f_sqr(uint64_t * const z, const uint64_t * const x, const size_t size)
+{
+	FastMul & fmul = FastMul::get_instance();
+	fmul.init(2 * size);
+	fmul.sqr(x, size);
+	fmul.get_z(z, 2 * size);
 }
 
 inline void g_get_str(char * const str, const uint64_t * const x, const size_t size)

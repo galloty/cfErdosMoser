@@ -99,7 +99,7 @@ public:
 
 	std::string get_memory_info() const
 	{
-		const size_t max_size = _max_size * sizeof(uint64_t), size_fmul = _size_fmul * sizeof(Zp);
+		const size_t max_size = _max_size * sizeof(uint64_t), size_fmul = _size_fmul;
 		const size_t max_block_size = _max_block_size * sizeof(uint64_t);
 
 		size_t size_divisor; std::string size_unit; get_unit(std::max(max_size, size_fmul), size_divisor, size_unit);
@@ -115,7 +115,7 @@ public:
 
 	std::string get_memory_usage() const
 	{
-		const size_t max_size = _max_size * sizeof(uint64_t), size_fmul = _size_fmul * sizeof(Zp);
+		const size_t max_size = _max_size * sizeof(uint64_t), size_fmul = _size_fmul;
 		size_t size_divisor; std::string size_unit; get_unit(std::max(max_size, size_fmul), size_divisor, size_unit);
 		std::ostringstream ss; ss << max_size / size_divisor << " + " << size_fmul / size_divisor << " " << size_unit;
 		return ss.str();

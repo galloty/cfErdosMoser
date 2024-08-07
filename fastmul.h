@@ -207,9 +207,8 @@ private:
 		}
 	}
 
-	void forward_out_mt(Zp4 * const x, const unsigned int thread_id)
+	void forward_out_mt(Zp4 * const x, const unsigned int thread_id, const unsigned int nthreads)
 	{
-		const unsigned int nthreads = _nthreads;
 		const int ln = _ln;
 		const size_t m_0 = _m_0, mi_0 = m_0 + _index_gap, ni_4 = _ni_4;
 		const Zp * const w = _w;
@@ -234,9 +233,8 @@ private:
 		}
 	}
 
-	void backward_out_mt(Zp4 * const x, const unsigned int thread_id)
+	void backward_out_mt(Zp4 * const x, const unsigned int thread_id, const unsigned int nthreads)
 	{
-		const unsigned int nthreads = _nthreads;
 		const int ln = _ln; const size_t n = size_t(1) << ln;
 		const size_t m_0 = _m_0, mi_0 = m_0 + _index_gap, ni_4 = _ni_4;
 		const Zp * const wi = _wi;
@@ -261,9 +259,8 @@ private:
 		}
 	}
 
-	void forward_in_mt(Zp4 * const x, const unsigned int thread_id)
+	void forward_in_mt(Zp4 * const x, const unsigned int thread_id, const unsigned int nthreads)
 	{
-		const unsigned int nthreads = _nthreads;
 		const size_t n = size_t(1) << _ln;
 		const size_t m_0 = _m_0;
 		const Zp * const w = _w;
@@ -271,6 +268,7 @@ private:
 		const size_t s_0 = n / 4 / m_0;
 		const size_t j_t_min = thread_id * s_0 / nthreads, j_t_max = (thread_id + 1 == nthreads) ? s_0 : (thread_id + 1) * s_0 / nthreads;
 
+		// m_0 consecutive Zp4 each step
 		for (size_t j_t = j_t_min; j_t < j_t_max; ++j_t)
 		{
 			Zp4 * const xt = &x[(m_0 + _index_gap) * j_t];
@@ -294,9 +292,8 @@ private:
 		}
 	}
 
-	void mul_in_mt(Zp4 * const x, const Zp4 * const y, const unsigned int thread_id)
+	void mul_in_mt(Zp4 * const x, const Zp4 * const y, const unsigned int thread_id, const unsigned int nthreads)
 	{
-		const unsigned int nthreads = _nthreads;
 		const size_t n = size_t(1) << _ln;
 		const size_t m_0 = _m_0;
 		const Zp * const w = _w;
@@ -356,50 +353,50 @@ private:
 
 	void forward_out(Zp4 * const x)
 	{
-		if (_nthreads > 1)
+		if ((_ln >= 14) && (_nthreads > 1))
 		{
 #pragma omp parallel
 			{
-				forward_out_mt(x, (unsigned int)(omp_get_thread_num()));
+				forward_out_mt(x, (unsigned int)(omp_get_thread_num()), _nthreads);
 			}
 		}
-		else forward_out_mt(x, 0);
+		else forward_out_mt(x, 0, 1);
 	}
 
 	void backward_out(Zp4 * const x)
 	{
-		if (_nthreads > 1)
+		if ((_ln >= 14) && (_nthreads > 1))
 		{
 #pragma omp parallel
 			{
-				backward_out_mt(x, (unsigned int)(omp_get_thread_num()));
+				backward_out_mt(x, (unsigned int)(omp_get_thread_num()), _nthreads);
 			}
 		}
-		else backward_out_mt(x, 0);
+		else backward_out_mt(x, 0, 1);
 	}
 
 	void forward_in(Zp4 * const x)
 	{
-		if (_nthreads > 1)
+		if ((_ln >= 14) && (_nthreads > 1))
 		{
 #pragma omp parallel
 			{
-				forward_in_mt(x, (unsigned int)(omp_get_thread_num()));
+				forward_in_mt(x, (unsigned int)(omp_get_thread_num()), _nthreads);
 			}
 		}
-		else forward_in_mt(x, 0);
+		else forward_in_mt(x, 0, 1);
 	}
 
 	void mul_in(Zp4 * const x, const Zp4 * const y)
 	{
-		if (_nthreads > 1)
+		if ((_ln >= 14) && (_nthreads > 1))
 		{
 #pragma omp parallel
 			{
-				mul_in_mt(x, y, (unsigned int)(omp_get_thread_num()));
+				mul_in_mt(x, y, (unsigned int)(omp_get_thread_num()), _nthreads);
 			}
 		}
-		else mul_in_mt(x, y, 0);
+		else mul_in_mt(x, y, 0, 1);
 	}
 
 	void set(Zp4 * const x, const uint64_t * const d, const size_t d_size)
@@ -505,6 +502,15 @@ public:
 		set(x, dx, dx_size);
 		forward_out(x);
 		mul_in(x, _y);
+		backward_out(x);
+	}
+
+	void sqr(const uint64_t * const dx, const size_t dx_size)
+	{
+		Zp4 * const x = _x;
+		set(x, dx, dx_size);
+		forward_out(x);
+		mul_in(x, x);
 		backward_out(x);
 	}
 

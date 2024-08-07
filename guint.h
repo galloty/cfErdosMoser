@@ -161,7 +161,7 @@ public:
 		if ((size == 0) || (n == 0)) { *this = 0; }
 		else
 		{
-			const uint64_t carry = g_mul_1(_d, size, n);
+			const uint64_t carry = g_mul_1(_d, _d, size, n);
 			if (carry != 0)
 			{
 				_set_size(size + 1);
@@ -258,47 +258,67 @@ public:
 
 	guint & mul(const guint & x, const guint & y)	// *this != x, *this != y
 	{
-		const size_t xsize = x._size, ysize = y._size;
-		if (ysize > xsize) { mul(y, x); return *this; }
-		if ((xsize == 0) || (ysize == 0)) { *this = 0; return *this; }
-		const size_t new_size = xsize + ysize;
-		_set_size(new_size);
+		const bool reverse = (y._size > x._size);
+		const size_t xsize = reverse ? y._size : x._size;
+		const size_t ysize = reverse ? x._size : y._size;
+		const uint64_t * const xd = reverse ? y._d : x._d;
+		const uint64_t * const yd = reverse ? x._d : y._d;
 
-		if ((ysize < 16) || (xsize <= 2 * ysize)) g_mul(_d, x._d, xsize, y._d, ysize);
+		if (ysize == 0) { *this = 0; return *this; }
+		const size_t zsize = xsize + ysize;
+		_set_size(zsize);
+		uint64_t * const d = _d;
+
+		if (ysize == 1) d[zsize - 1] = g_mul_1(d, xd, xsize, yd[0]);
+		else if (zsize < 8192) g_mul(d, xd, xsize, yd, ysize);
 		else
 		{
-			const size_t n = xsize / ysize, n_r = xsize % ysize;	// n >= 1
-			guint t(2 * ysize), c(ysize);
+			if (xsize < 2 * ysize) { f_mul_set_y(zsize, yd, ysize); f_mul(d, zsize, xd, xsize); }
+			else
+			{
+				const size_t n = xsize / ysize, n_r = xsize % ysize;	// n >= 2
+				guint t(2 * ysize), c(ysize);
+				uint64_t * const td = t._d; uint64_t * const cd = c._d;
+				if (ysize >= 4096) f_mul_set_y(2 * ysize, yd, ysize);
 
-			g_zero(c._d, ysize);
-			for (size_t i = 0; i < n; ++i)
-			{
-				g_mul(t._d, y._d, ysize, &x._d[i * ysize], ysize);
-				const uint64_t carry = g_add(&_d[i * ysize], t._d, ysize, c._d, ysize);
-				g_copy(c._d, &t._d[ysize], ysize);
-				g_add_1(c._d, ysize, carry);
+				g_zero(cd, ysize);
+				for (size_t i = 0; i < n; ++i)
+				{
+					if (ysize >= 4096) f_mul(td, 2 * ysize, &xd[i * ysize], ysize);
+					else g_mul(td, yd, ysize, &xd[i * ysize], ysize);
+					const uint64_t carry = g_add(&d[i * ysize], td, ysize, cd, ysize);
+					g_copy(cd, &td[ysize], ysize);
+					g_add_1(cd, ysize, carry);
+				}
+				if (n_r > 0)
+				{
+					if (ysize >= 4096) f_mul(td, 2 * ysize, &xd[n * ysize], n_r);
+					else g_mul(td, yd, ysize, &xd[n * ysize], n_r);
+					g_add(&d[n * ysize], td, ysize + n_r, cd, ysize);
+				}
+				else g_copy(&d[n * ysize], cd, ysize);
 			}
-			if (n_r > 0)
-			{
-				g_mul(t._d, y._d, ysize, &x._d[n * ysize], n_r);
-				g_add(&_d[n * ysize], t._d, ysize + n_r, c._d, ysize);
-			}
-			else g_copy(&_d[n * ysize], c._d, ysize);
 		}
 
-		if (_d[new_size - 1] == 0) _set_size(new_size - 1);
+		if (d[zsize - 1] == 0) _set_size(zsize - 1);
 		return *this;
 	}
 
 	guint & sqr(const guint & x)	// *this != x
 	{
-		const size_t size = x._size;
-		if (size == 0) { *this = 0; return *this; }
-		const size_t new_size = size + size;
-		_set_size(new_size);
+		const size_t xsize = x._size;
+		const uint64_t * const xd = x._d;
+
+		if (xsize == 0) { *this = 0; return *this; }
+		const size_t zsize = 2 * xsize;
+		_set_size(zsize);
 		uint64_t * const d = _d;
-		g_sqr(d, x._d, size);
-		if (d[new_size - 1] == 0) _set_size(new_size - 1);
+
+		if (xsize == 1) d[zsize - 1] = g_mul_1(d, xd, xsize, xd[0]);
+		else if (zsize < 8192) g_sqr(d, xd, xsize);
+		else f_sqr(d, xd, xsize);
+
+		if (d[zsize - 1] == 0) _set_size(zsize - 1);
 		return *this;
 	}
 
