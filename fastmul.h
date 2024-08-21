@@ -9,9 +9,11 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <cstdint>
 #include <stdexcept>
+#include <memory>
+
 #include <omp.h>
 
-#include "mod64.h"
+#include "Zp.h"
 #include "heap.h"
 
 class FastMul
@@ -55,10 +57,10 @@ private:
 		Heap & heap = Heap::get_instance();
 		if (_wsize != 0)
 		{
-			heap.free_fmul(_w, _wsize * sizeof(Zp));
-			heap.free_fmul(_wi, _wsize * sizeof(Zp));
-			heap.free_fmul(_x, _xsize * sizeof(Zp4));
-			heap.free_fmul(_y, _xsize * sizeof(Zp4));
+			heap.aligned_free(_w, _wsize * sizeof(Zp));
+			heap.aligned_free(_wi, _wsize * sizeof(Zp));
+			heap.aligned_free(_x, _xsize * sizeof(Zp4));
+			heap.aligned_free(_y, _xsize * sizeof(Zp4));
 		}
 		_wsize = _xsize = 0; _w = _wi = nullptr; _x = _y = nullptr;
 	}
@@ -68,10 +70,10 @@ private:
 		free();
 		Heap & heap = Heap::get_instance();
 		_wsize = n / 4; _xsize = _ni_4;
-		_w = static_cast<Zp *>(heap.alloc_fmul(_wsize * sizeof(Zp)));
-		_wi = static_cast<Zp *>(heap.alloc_fmul(_wsize * sizeof(Zp)));
-		_x = static_cast<Zp4 *>(heap.alloc_fmul(_xsize * sizeof(Zp4)));
-		_y = static_cast<Zp4 *>(heap.alloc_fmul(_xsize * sizeof(Zp4)));
+		_w = static_cast<Zp *>(heap.aligned_alloc(_wsize * sizeof(Zp)));
+		_wi = static_cast<Zp *>(heap.aligned_alloc(_wsize * sizeof(Zp)));
+		_x = static_cast<Zp4 *>(heap.aligned_alloc(_xsize * sizeof(Zp4)));
+		_y = static_cast<Zp4 *>(heap.aligned_alloc(_xsize * sizeof(Zp4)));
 	}
 
 	finline static void forward4(Zp4 * const x, const size_t m, const Zp & w_1, const Zp & w_2, const Zp & w_3)

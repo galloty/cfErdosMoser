@@ -8,9 +8,6 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #pragma once
 
 #include <cstdint>
-#include <immintrin.h>
-
-#include "fastmul.h"
 
 // #define GMP_MPN	true	// Must be 64-bit GMP
 
@@ -19,8 +16,6 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #ifdef GMP_MPN
 // Low-level functions are implemented using GMP. On Windows, mpn has limit of 2^(31 + 6) bits (41 billion digits).
 #else
-
-#include "mod64.h"
 
 inline uint64_t _addc(const uint64_t x, const uint64_t y, uint64_t & carry)
 {

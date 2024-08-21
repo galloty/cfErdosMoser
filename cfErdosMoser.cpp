@@ -93,7 +93,7 @@ private:
 		ss << "Usage: cfErdosMoser <N> [-v]" << std::endl;
 		ss << "  N: compute the regular continued fraction of log(2)/(2N)," << std::endl;
 		ss << "     if N = 0 then check N = 1, 2, 2^2, ..., 2^8, 2^8*3, ..." << std::endl;
-		ss << " -t <n>: number of threads (default: 1 thread, 0: all logical cores)," << std::endl;
+		ss << " -t <n>: number of threads (1 or 4 threads, default: 4)," << std::endl;
 		ss << " -v: verbose mode." << std::endl;
 		return ss.str();
 	}
@@ -106,7 +106,7 @@ public:
 
 		const std::string arg1((argc > 1) ? argv[1] : "6912");
 
-		int nthreads = 1;
+		int nthreads = 4;
 		bool verbose = false;
 
 		std::vector<std::string> args;

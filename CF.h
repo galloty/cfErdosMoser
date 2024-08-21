@@ -70,7 +70,7 @@ public:
 	}
 
 	void set_verbose(const bool verbose) { _verbose = verbose; }
-	void set_nthreads(const int nthreads) { FastMul::get_instance().set_nthreads(nthreads); }
+	void set_nthreads(const int nthreads) { SSG::set_nthreads(nthreads); }
 
 private:
 	static std::string format_time(const double time)
@@ -524,7 +524,7 @@ public:
 		}
 
 		_N.clear(); _cond_b.clear(); _a_j.clear(); M.clear();
-		FastMul::get_instance().clear(); heap.reset();
+		heap.reset();
 		if (_verbose) std::cout << "Memory size: " << heap.get_memory_size() << "." << std::endl;
 		return !_quit;
 	}

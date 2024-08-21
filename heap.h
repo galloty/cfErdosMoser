@@ -16,8 +16,6 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <gmp.h>
 
-#include "mod64.h"
-
 // Memory allocation
 class Heap
 {
@@ -211,7 +209,7 @@ public:
 		else _free(ptr);
 	}
 
-	void * alloc_fmul(const size_t size)
+	void * aligned_alloc(const size_t size)
 	{
 		_size_fmul += size;
 		void * const ptr = _aligned_alloc(size, 4096);	// 4kB TLB pages
@@ -219,5 +217,5 @@ public:
 		return ptr;
 	}
 
-	void free_fmul(void * const ptr, const size_t size) { _size_fmul -= size; _aligned_free(ptr); }
+	void aligned_free(void * const ptr, const size_t size) { _size_fmul -= size; _aligned_free(ptr); }
 };
