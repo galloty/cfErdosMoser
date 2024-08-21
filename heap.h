@@ -13,6 +13,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <string>
 #include <sstream>
 #include <queue>
+#include <mutex>
 
 #include <gmp.h>
 
@@ -25,6 +26,7 @@ private:
 	size_t _alloc_count, _realloc_count, _free_count, _block_count;
 	size_t _max_size, _max_size_other, _max_size_gmp, _max_block_size, _max_block_count;
 	std::queue<uint64_t *> _small_block_queue;
+	std::mutex _mtx;
 
 private:
 	struct deleter { void operator()(const Heap * const p) { delete p; } };
@@ -80,6 +82,7 @@ private:
 	static void * _alloc_gmp(size_t size)
 	{
 		auto & me = get_instance();
+		std::lock_guard<std::mutex> lock(me._mtx);
 		me._size_gmp += size;
 		me._max_size_gmp = std::max(me._max_size_gmp, me._size_gmp);
 		return std::malloc(size);
@@ -88,12 +91,19 @@ private:
 	static void * _realloc_gmp(void * ptr, size_t old_size, size_t new_size)
 	{
 		auto & me = get_instance();
+		std::lock_guard<std::mutex> lock(me._mtx);
 		me._size_gmp += new_size - old_size;
 		me._max_size_gmp = std::max(me._max_size_gmp, me._size_gmp);
 		return std::realloc(ptr, new_size);
 	}
 
-	static void _free_gmp(void * ptr, size_t size) { auto & me = get_instance(); me._size_gmp -= size; if (size > 0) std::free(ptr); }
+	static void _free_gmp(void * ptr, size_t size)
+	{
+		auto & me = get_instance();
+		std::lock_guard<std::mutex> lock(me._mtx);
+		me._size_gmp -= size;
+		if (size > 0) std::free(ptr);
+	}
 
 	static void get_unit(const size_t size, size_t & divisor, std::string & unit)
 	{
