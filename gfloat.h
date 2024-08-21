@@ -8,7 +8,6 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #pragma once
 
 #include <cstdint>
-#include <cmath>
 #include <string>
 #include <sstream>
 #include <iomanip>

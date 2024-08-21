@@ -8,6 +8,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #pragma once
 
 #include <cstdint>
+#define _USE_MATH_DEFINES
 #include <cmath>
 
 #include <gmp.h>
@@ -584,7 +585,6 @@ public:
 		}
 	}
 
-	// void set_x(const uint64_t * const x, const size_t size) { set_vector(_x, x, size); }
 	void set_y(const uint64_t * const y, const size_t size) { set_vector(_y, y, size); _y.forward_Mersenne_0(_l / 2, _nthreads); }
 
 	void get_x(uint64_t * const x, const size_t size) { get_vector(x, size, _x); }
@@ -603,15 +603,14 @@ public:
 
 	static void get_best_param(const size_t N, unsigned int & k, size_t & M, size_t & n)
 	{
-		k = 0;
-		for (unsigned int i = 1; true; ++i)
+		k = 5;
+		for (unsigned int i = 6; true; ++i)
 		{
 			size_t M_i, n_i; const double efficiency = get_param(N, i, M_i, n_i);
 			const size_t K_i = size_t(1) << i;
 			if (K_i > 2 * std::sqrt(M_i * K_i)) break;
 			if (efficiency > 0.95) k = i;
 		}
-
 		get_param(N, k, M, n);
 	}
 };

@@ -9,8 +9,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <cstdint>
 #include <stdexcept>
-#include <iomanip>
-#include <iostream>
+#include <sstream>
 #define _USE_MATH_DEFINES
 #include <cmath>
 #include <vector>

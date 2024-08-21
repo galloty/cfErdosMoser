@@ -21,17 +21,17 @@ class Heap
 {
 private:
 	static const size_t min_size = 64 * 1024 / sizeof(uint64_t);
-	size_t _size, _size_fmul, _size_gmp;
+	size_t _size, _size_other, _size_gmp;
 	size_t _alloc_count, _realloc_count, _free_count, _block_count;
-	size_t _max_size, _max_size_gmp, _max_block_size, _max_block_count;
+	size_t _max_size, _max_size_other, _max_size_gmp, _max_block_size, _max_block_count;
 	std::queue<uint64_t *> _small_block_queue;
 
 private:
 	struct deleter { void operator()(const Heap * const p) { delete p; } };
 
 public:
-	Heap() : _size(0), _size_fmul(0), _size_gmp(0), _alloc_count(0), _realloc_count(0), _free_count(0), _block_count(0),
-		_max_size(0), _max_size_gmp(0), _max_block_size(0), _max_block_count(0)
+	Heap() : _size(0), _size_other(0), _size_gmp(0), _alloc_count(0), _realloc_count(0), _free_count(0), _block_count(0),
+		_max_size(0), _max_size_other(0), _max_size_gmp(0), _max_block_size(0), _max_block_count(0)
 	{
 		mp_set_memory_functions(_alloc_gmp, _realloc_gmp, _free_gmp);
 	}
@@ -115,37 +115,41 @@ public:
 
 	std::string get_memory_size() const
 	{
-		std::ostringstream ss; ss << _size << " + " << _size_fmul << " + " << _size_gmp << " B";
+		std::ostringstream ss; ss << _size << " + " << _size_other << " + " << _size_gmp << " B";
 		return ss.str();
 	}
 
 	std::string get_memory_info() const
 	{
-		const size_t max_size = _max_size * sizeof(uint64_t), size_fmul = _size_fmul + _max_size_gmp;
-		const size_t max_block_size = _max_block_size * sizeof(uint64_t);
+		const size_t max_size = _max_size * sizeof(uint64_t), max_block_size = _max_block_size * sizeof(uint64_t);
 
-		size_t size_divisor; std::string size_unit; get_unit(std::max(max_size, size_fmul), size_divisor, size_unit);
+		size_t size_divisor; std::string size_unit; get_unit(std::max(std::max(max_size, _max_size_other), _max_size_gmp), size_divisor, size_unit);
 		size_t block_size_divisor; std::string block_size_unit; get_unit(max_block_size, block_size_divisor, block_size_unit);
 
 		std::ostringstream ss;
-		ss << "max size: " << max_size / size_divisor << " + " << size_fmul / size_divisor << " " << size_unit << ", "
+		ss << "max size: " << max_size / size_divisor << " + " << _max_size_other / size_divisor << " + " << _max_size_gmp / size_divisor << " " << size_unit << ", "
 			<< "max block size: " << max_block_size / block_size_divisor << " " << block_size_unit << ", "
 			<< "alloc: " << _alloc_count << ", realloc: " << _realloc_count << ", free: " << _free_count << ", max block count: " << _max_block_count
-			<< " (" << _small_block_queue.size() << ").";
+			<< " (" << _small_block_queue.size() << ")";
 		return ss.str();
 	}
 
 	std::string get_memory_usage() const
 	{
-		const size_t max_size = _max_size * sizeof(uint64_t), size_fmul = _size_fmul + _max_size_gmp;
-		size_t size_divisor; std::string size_unit; get_unit(std::max(max_size, size_fmul), size_divisor, size_unit);
-		std::ostringstream ss; ss << max_size / size_divisor << " + " << size_fmul / size_divisor << " " << size_unit;
+		const size_t max_size = _max_size * sizeof(uint64_t);
+		size_t size_divisor; std::string size_unit; get_unit(std::max(std::max(max_size, _max_size_other), _max_size_gmp), size_divisor, size_unit);
+		std::ostringstream ss; ss << max_size / size_divisor << " + " << _max_size_other / size_divisor << " + " << _max_size_gmp / size_divisor << " " << size_unit;
 		return ss.str();
 	}
 
+	size_t get_max_mem_size() const { return _max_size * sizeof(uint64_t) + _max_size_other + _max_size_gmp; }
+
 	void reset()
 	{
-		_alloc_count = _realloc_count = _free_count = _block_count = _max_size = _max_size_gmp = _max_block_size = _max_block_count = 0;
+		_alloc_count = _realloc_count = _free_count = 0;
+		_max_size = _max_size_other = _max_size_gmp = 0;
+		_max_block_size = 0;
+		_max_block_count = _block_count;
 
 		while (!_small_block_queue.empty())
 		{
@@ -211,11 +215,13 @@ public:
 
 	void * aligned_alloc(const size_t size)
 	{
-		_size_fmul += size;
+		_size_other += size;
+		_max_size_other = std::max(_max_size_other, _size_other);
+
 		void * const ptr = _aligned_alloc(size, 4096);	// 4kB TLB pages
 		if (ptr == nullptr) throw std::runtime_error("malloc failed");
 		return ptr;
 	}
 
-	void aligned_free(void * const ptr, const size_t size) { _size_fmul -= size; _aligned_free(ptr); }
+	void aligned_free(void * const ptr, const size_t size) { _size_other -= size; _aligned_free(ptr); }
 };

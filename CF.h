@@ -492,7 +492,8 @@ public:
 				const double elapsed_time = t0 + std::chrono::duration<double>(now - start_time).count();
 				ss	<< format_time(elapsed_time) << ": q_j = " << _q_j.to_string() << ", n = " << n << " [" << nstep << "], "
 					<< "j = " << _j << " (dj/dt = " << int((_j - j_prev) / dt) << ")";
-				if (!_verbose) ss << ", mem usage: " << heap.get_memory_usage();
+				const double bytes_j = double(heap.get_max_mem_size()) / _j;
+				if (!_verbose) ss << ", mem usage: " << heap.get_memory_usage() << ", " << std::setprecision(3) << bytes_j << " B/j";
 				ss << ".";
 				j_prev = _j;
 
@@ -500,11 +501,11 @@ public:
 				{
 					const double time_total = time_gcf_extend + time_gcf_mul + time_gcf_div_invert + time_gcf_div_exact + time_cf_reduce;
 
-					ss	<< std::endl
+					ss	<< std::endl << std::setprecision(3)
 						<< "    " << Heap::get_size_str(M_min_size) << " <= M size <= " << Heap::get_size_str(M_max_size)
 						<< ", Mgcf size = " << Heap::get_size_str(Mgcf_size) << ", divisor size = " << Heap::get_size_str(divisor_size) << std::endl;
-					ss	<< "    Memory usage: " << heap.get_memory_info() << std::endl;
-					ss	<< "    CPU usage: " << std::setprecision(3)
+					ss	<< "    Memory usage: " << heap.get_memory_info() << ", " << bytes_j << " B/j" << std::endl;
+					ss	<< "    CPU usage: "
 						<< "gcf_extend: " << time_gcf_extend * 100 / time_total << "%, gcf_mul: " << time_gcf_mul * 100 / time_total << "%, "
 						<< "gcf_div_invert: " << time_gcf_div_invert * 100 / time_total << "%, gcf_div_exact: " << time_gcf_div_exact * 100 / time_total
 						<< "%, cf_reduce: " << time_cf_reduce * 100 / time_total << "%." << std::endl;
