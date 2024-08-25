@@ -450,21 +450,18 @@ public:
 				save_checkpoint(t0 + std::chrono::duration<double>(now - start_time).count(), n, nstep, M);
 			}
 
-// const double ref = M.get_byte_count() / 4;
 			{
 				// Matrix form of the generalized continued fraction: p_{n-2} / q_{n-2} and p_{n-1} / q_{n-1}.
 				// Compute nstep terms of the matrix and its divisor starting at n.
-				Mat22u Mgcf; guint divisor;
-				time_gcf_extend += gcf_extend(Mgcf, divisor, n, nstep);
-				Mgcf_size = Mgcf.get_byte_count();
-// std::cout << "M: 4x 1.0" << std::endl;
-// std::cout << "Mgcf: 4x " << (Mgcf.get_byte_count() / 4) / ref << std::endl;
-// std::cout << "Divisor: " << divisor.get_byte_count() / ref<< std::endl;
-				divisor_size = divisor.get_byte_count();
+				guint divisor;
+				{
+					Mat22u Mgcf;
+					time_gcf_extend += gcf_extend(Mgcf, divisor, n, nstep);
+					Mgcf_size = Mgcf.get_byte_count();
+					divisor_size = divisor.get_byte_count();
 
-				time_gcf_mul += gcf_mul(M, Mgcf);
-				Mgcf.clear();
-// std::cout << "M_mul: 4x " << (M.get_byte_count() / 4) / ref << std::endl;
+					time_gcf_mul += gcf_mul(M, Mgcf);
+				}
 
 				M_max_size = M.get_byte_count();
 
@@ -472,12 +469,10 @@ public:
 				guint divisor_inv(divisor.get_size() + 1);
 				time_gcf_div_invert += gcf_div_invert(divisor_inv, divisor);
 				time_gcf_div_exact += gcf_div_exact(M, divisor, divisor_inv, right_shift);
-// std::cout << "M_div: 4x " << (M.get_byte_count() / 4) / ref << std::endl;
 			}
 			n += nstep;
 
 			time_cf_reduce += cf_reduce(M, found);
-// std::cout << "M_red: 4x " << (M.get_byte_count() / 4) / ref << std::endl;
 
 			if (found) found = condition_c();
 
@@ -504,11 +499,13 @@ public:
 					ss	<< std::endl << std::setprecision(3)
 						<< "    " << Heap::get_size_str(M_min_size) << " <= M size <= " << Heap::get_size_str(M_max_size)
 						<< ", Mgcf size = " << Heap::get_size_str(Mgcf_size) << ", divisor size = " << Heap::get_size_str(divisor_size) << std::endl;
-					ss	<< "    Memory usage: " << heap.get_memory_info() << ", " << bytes_j << " B/j" << std::endl;
+					ss	<< "    Memory usage: " << heap.get_memory_info1() << ", " << std::endl;
+					ss	<< "                  " << heap.get_memory_info2() << ", " << std::endl;
+					ss	<< "                  " << heap.get_memory_info3() << ", B/j: " << bytes_j << std::endl;
 					ss	<< "    CPU usage: "
-						<< "gcf_extend: " << time_gcf_extend * 100 / time_total << "%, gcf_mul: " << time_gcf_mul * 100 / time_total << "%, "
-						<< "gcf_div_invert: " << time_gcf_div_invert * 100 / time_total << "%, gcf_div_exact: " << time_gcf_div_exact * 100 / time_total
-						<< "%, cf_reduce: " << time_cf_reduce * 100 / time_total << "%." << std::endl;
+						<< "extend: " << time_gcf_extend * 100 / time_total << "%, mul: " << time_gcf_mul * 100 / time_total << "%, "
+						<< "div_invert: " << time_gcf_div_invert * 100 / time_total << "%, div_exact: " << time_gcf_div_exact * 100 / time_total
+						<< "%, reduce: " << time_cf_reduce * 100 / time_total << "%." << std::endl;
 				}
 				else
 				{

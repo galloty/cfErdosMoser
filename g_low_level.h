@@ -38,13 +38,6 @@ inline uint64_t _mulc(const uint64_t x, const uint64_t y, uint64_t & carry)
 	return uint64_t(t);
 }
 
-inline uint64_t _madc(const uint64_t x, const uint64_t y, const uint64_t z, uint64_t & carry)
-{
-	const __uint128_t t = z + x * __uint128_t(y) + carry;
-	carry = uint64_t(t >> 64);
-	return uint64_t(t);
-}
-
 // Modular SIMD arithmetic in Mathemagix, Joris van der Hoeven, Grégoire Lecerf, Guillaume Quintin, Chapter 2.2.
 
 inline int _mod_exp(const uint64_t p) { int r = 0; while ((p >> r) != 0) ++r; return r; }	// 2^{r-1} <= p < 2^r
@@ -105,14 +98,14 @@ inline uint64_t g_add_1(uint64_t * const x, const size_t size, const uint64_t n)
 #ifdef GMP_MPN
 	return (uint64_t)mpn_add_1(mp_ptr(x), mp_srcptr(x), mp_size_t(size), mp_limb_t(n));
 #else
-	uint64_t carry = 0;
-	x[0] = _addc(x[0], n, carry);
-	for (size_t i = 1; i < size; ++i)
+	const uint64_t x_0 = x[0] + n; x[0] = x_0;
+	if (x_0 >= n) return 0;
+	for (size_t i = 1; i < size; ++i)	// carry
 	{
-		if (carry == 0) break;
-		x[i] = _addc(x[i], 0, carry);
+		const uint64_t x_i = x[i] + 1; x[i] = x_i;
+		if (x_i != 0) return 0;
 	}
-	return carry;
+	return 1;
 #endif
 }
 
@@ -122,12 +115,12 @@ inline void g_sub_1(uint64_t * const x, const size_t size, const uint64_t n)
 #ifdef GMP_MPN
 	mpn_sub_1(mp_ptr(x), mp_srcptr(x), mp_size_t(size), mp_limb_t(n));
 #else
-	uint64_t borrow = 0;
-	x[0] = _subb(x[0], n, borrow);
-	for (size_t i = 1; i < size; ++i)
+	const uint64_t x_0 = x[0]; x[0] = x_0 - n;
+	if (x_0 >= n) return;
+	for (size_t i = 1; i < size; ++i)	// borrow
 	{
-		if (borrow == 0) break;
-		x[i] = _subb(x[i], 0, borrow);
+		const uint64_t x_i = x[i]; x[i] = x_i - 1;
+		if (x_i != 0) return;
 	}
 #endif
 }
@@ -212,8 +205,18 @@ inline uint64_t g_add(uint64_t * const z, const uint64_t * const x, const size_t
 	return (uint64_t)mpn_add(mp_ptr(z), mp_srcptr(x), mp_size_t(x_size), mp_srcptr(y), mp_size_t(y_size));
 #else
 	uint64_t carry = 0;
+#ifdef __x86_64x
+#else
 	for (size_t i = 0; i < y_size; ++i) z[i] = _addc(x[i], y[i], carry);
-	for (size_t i = y_size; i < x_size; ++i) z[i] = _addc(x[i], 0, carry);
+	size_t i = y_size;
+	for (; i < x_size; ++i)
+	{
+		if (carry == 0) break;
+		const uint64_t z_i = x[i] + 1; z[i] = z_i;
+		carry = (z_i == 0) ? 1 : 0;
+	}
+	if (z != x) { for (; i < x_size; ++i) z[i] = x[i]; }
+#endif
 	return carry;
 #endif
 }
@@ -225,8 +228,15 @@ inline void g_sub(uint64_t * const z, const uint64_t * const x, const size_t x_s
 	mpn_sub(mp_ptr(z), mp_srcptr(x), mp_size_t(x_size), mp_srcptr(y), mp_size_t(y_size));
 #else
 	uint64_t borrow = 0;
-	for (size_t i = 0; i < y_size; ++i) z[i] = _subb(x[i], y[i], borrow);
-	for (size_t i = y_size; i < x_size; ++i) z[i] = _subb(x[i], 0, borrow);
+	for (size_t i = 0;  i < y_size; ++i) z[i] = _subb(x[i], y[i], borrow);
+	size_t i = y_size;
+	for (; i < x_size; ++i)
+	{
+		if (borrow == 0) break;
+		const uint64_t x_i = x[i]; z[i] = x_i - 1;
+		borrow = (x_i == 0) ? 1 : 0;
+	}
+	if (z != x) { for (; i < x_size; ++i) z[i] = x[i]; }
 #endif
 }
 
@@ -237,6 +247,12 @@ inline void g_mul(uint64_t * const z, const uint64_t * const x, const size_t x_s
 }
 
 // size > 0, z_size = 2 * x_size
+inline void g_mul(uint64_t * const z, const uint64_t * const x, const uint64_t * const y, const size_t size)
+{
+	mpn_mul_n(mp_ptr(z), mp_srcptr(x), mp_srcptr(y), mp_size_t(size));
+}
+
+// size > 0, z_size = 2 * x_size
 inline void g_sqr(uint64_t * const z, const uint64_t * const x, const size_t size)
 {
 	mpn_sqr(mp_ptr(z), mp_srcptr(x), mp_size_t(size));
@@ -244,33 +260,7 @@ inline void g_sqr(uint64_t * const z, const uint64_t * const x, const size_t siz
 
 inline void g_get_str(char * const str, const uint64_t * const x, const size_t size)
 {
-#ifdef GMP_MPN
 	const size_t str_size = mpn_get_str((unsigned char *)str, 10, mp_ptr(x), mp_size_t(size));
 	for (size_t i = 0; i < str_size; ++i) str[i] += '0';
 	str[str_size] = '\0';
-#else
-	if (size == 0) { str[0] = '0'; str[1] = '\0'; return; }
-
-	size_t qsize = size;
-	uint64_t * const q = new uint64_t[size];
-	g_copy(q, x, size);
-
-	size_t k = 0;
-	while (qsize != 0)
-	{
-		uint64_t r = 0;
-		for (size_t i = 0, j = qsize - 1; i < qsize; ++i, --j)
-		{
-			const __uint128_t t = (__uint128_t(r) << 64) | q[j];
-			q[j] = uint64_t(t / 10); r = uint64_t(t % 10);
-		}
-		str[k] = '0' + char(r); ++k;
-		if (q[qsize - 1] == 0) --qsize;
-	}
-
-	str[k] = '\0';
-	for (size_t i = 0; i < k / 2; ++i) std::swap(str[i], str[k - i - 1]);
-
-	delete[] q;
-#endif
 }

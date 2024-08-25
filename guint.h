@@ -31,20 +31,20 @@ private:
 	void _alloc(const size_t size)
 	{
 		_alloc_size = Heap::get_min_size(size);
-		_d = Heap::get_instance().alloc(_alloc_size);
+		_d = Heap::get_instance().alloc_g(_alloc_size);
 	}
 
-	void _realloc(const size_t size)
+	void _realloc(const size_t size, const bool copy)
 	{
 		const size_t alloc_size = Heap::get_min_size(size);
-		_d = Heap::get_instance().realloc(_d, _alloc_size, alloc_size);
+		_d = Heap::get_instance().realloc_g(_d, _alloc_size, alloc_size, copy);
 		_alloc_size = alloc_size;
 	}
 
-	void _free() { Heap::get_instance().free(_d, _alloc_size); }
+	void _free() { Heap::get_instance().free_g(_d, _alloc_size); }
 
-	void _set_size(const size_t size) { _size = size; if (size > _alloc_size) _realloc(size); }
-	void _shrink() { _realloc(_size); }
+	void _set_size(const size_t size, const bool copy = true) { _size = size; if (size > _alloc_size) _realloc(size, copy); }
+	void _clear() { _size = 0; _realloc(_size, false); }
 
 	void _norm()
 	{
@@ -68,7 +68,7 @@ private:
 		}
 		else
 		{
-			r._set_size(xsize - (ysize - 1));
+			r._set_size(xsize - (ysize - 1), false);
 			g_copy(r._d, &x._d[ysize - 1], xsize - (ysize - 1));
 
 			// *this = (r * y_inv) >> (ysize + 1)
@@ -105,10 +105,10 @@ public:
 	size_t get_size() const { return _size; }
 	size_t get_byte_count() const { return get_size() * sizeof(uint64_t); }
 
-	guint & operator=(const uint64_t n) { _set_size((n == 0) ? 0 : 1); _d[0] = n; return *this; }
-	guint & operator=(const guint & rhs) { if (&rhs != this) { _set_size(rhs._size); g_copy(_d, rhs._d, rhs._size); } return *this; }
+	guint & operator=(const uint64_t n) { _set_size((n == 0) ? 0 : 1, false); _d[0] = n; return *this; }
+	guint & operator=(const guint & rhs) { if (&rhs != this) { _set_size(rhs._size, false); g_copy(_d, rhs._d, rhs._size); } return *this; }
 
-	void clear() { _set_size(0); _shrink(); }
+	void clear() { _clear(); }
 
 	guint & swap(guint & rhs) { std::swap(_alloc_size, rhs._alloc_size); std::swap(_size, rhs._size); std::swap(_d, rhs._d); return *this; }
 
@@ -145,7 +145,7 @@ public:
 		const size_t size = _size;
 		uint64_t * const d = _d;
 
-		if (size == 0) { _set_size(1); _d[0] = n; return false; }
+		if (size == 0) { _set_size(1, false); _d[0] = n; return false; }
 		if ((size == 1) && (d[0] < n)) { d[0] = n - d[0]; return false; }
 
 		g_sub_1(d, size, n);
@@ -250,7 +250,7 @@ public:
 			_norm();
 			return false;
 		}
-		_set_size(0);
+		_set_size(0, false);
 		return true;
 	}
 
@@ -267,7 +267,7 @@ public:
 
 		if (ysize == 0) { *this = 0; return *this; }
 		const size_t zsize = xsize + ysize;
-		_set_size(zsize);
+		_set_size(zsize, false);
 		uint64_t * const d = _d;
 
 		const size_t fmin_size = 4096;
@@ -300,18 +300,17 @@ public:
 					}
 					if (n_r > 0)
 					{
-						ssg.mul_xy(&xd[n * ysize], n_r); ssg.get_x(td, 2 * ysize);
+						ssg.mul_xy(&xd[n * ysize], n_r); ssg.get_x(td, ysize + n_r);
 						g_add(&d[n * ysize], td, ysize + n_r, cd, ysize);
 					}
 					else g_copy(&d[n * ysize], cd, ysize);
-
 				}
 				else
 				{
 					g_zero(cd, ysize);
 					for (size_t i = 0; i < n; ++i)
 					{
-						g_mul(td, yd, ysize, &xd[i * ysize], ysize);
+						g_mul(td, yd, &xd[i * ysize], ysize);
 						const uint64_t carry = g_add(&d[i * ysize], td, ysize, cd, ysize);
 						g_copy(cd, &td[ysize], ysize);
 						g_add_1(cd, ysize, carry);
@@ -337,11 +336,12 @@ public:
 
 		if (xsize == 0) { *this = 0; return *this; }
 		const size_t zsize = 2 * xsize;
-		_set_size(zsize);
+		_set_size(zsize, false);
 		uint64_t * const d = _d;
 
+		const size_t fmin_size = 4096;
 		if (xsize == 1) d[zsize - 1] = g_mul_1(d, xd, xsize, xd[0]);
-		else if (zsize < 4096) g_sqr(d, xd, xsize);
+		else if (zsize < fmin_size) g_sqr(d, xd, xsize);
 		else
 		{
 			unsigned int k = 0;	size_t M, ns; SSG::get_best_param(64 * zsize, k, M, ns);
@@ -472,19 +472,19 @@ public:
 		const size_t n = size / dsize, n_r = size % dsize;	// n >= 1
 		guint q_j(2 * dsize), t(dsize + 1);
 
-		q_j._set_size(n_r);
+		q_j._set_size(n_r, false);
 		g_copy(q_j._d, &_d[n * dsize], n_r);
 
-		r._set_size(dsize);
+		r._set_size(dsize, false);
 		t._div(r, q_j, d, d_inv);
-		q._set_size(n * dsize + t._size);
+		q._set_size(n * dsize + t._size, false);
 		g_copy(&q._d[n * dsize], t._d, t._size);
 
 		for (size_t i = 0, j = n - 1; i < n; ++i, --j)
 		{
-			q_j._set_size(dsize + r._size);
-			g_copy(&q_j._d[dsize], r._d, r._size);
+			q_j._set_size(dsize + r._size, false);
 			g_copy(q_j._d, &_d[j * dsize], dsize);
+			g_copy(&q_j._d[dsize], r._d, r._size);
 			if (r._size == 0) q_j._norm();
 
 			t._div(r, q_j, d, d_inv);
@@ -535,7 +535,7 @@ public:
 				if (q == n128 / (d128 + 1))	// 5.6%
 				{
 					const uint64_t q_h = uint64_t(q >> 64), q_l = uint64_t(q);
-					if (q_h != 0) { _set_size(2); _d[0] = q_l; _d[1] = q_h; } else *this = q_l;
+					if (q_h != 0) { _set_size(2, false); _d[0] = q_l; _d[1] = q_h; } else *this = q_l;
 					return *this;
 				}
 			}
@@ -552,7 +552,7 @@ public:
 				if (q == n128 / (__uint128_t(d64) + 1))
 				{
 					const uint64_t q_h = uint64_t(q >> 64), q_l = uint64_t(q);
-					if (q_h != 0) { _set_size(2); _d[0] = q_l; _d[1] = q_h; } else *this = q_l;
+					if (q_h != 0) { _set_size(2, false); _d[0] = q_l; _d[1] = q_h; } else *this = q_l;
 					return *this;
 				}
 			}
@@ -571,7 +571,7 @@ public:
 		const size_t size = _size;
 		if (n >= size) throw std::runtime_error("split failed");
 
-		lo._set_size(n);
+		lo._set_size(n, false);
 		g_copy(lo._d, _d, n);
 		lo._norm();
 
@@ -594,10 +594,9 @@ public:
 
 	std::string to_string() const
 	{
-		char * const cstr = new char[_size * 20 + 16];
+		char cstr[_size * 20 + 16];
 		g_get_str(cstr, _d, _size);
 		const std::string str = std::string(cstr);
-		delete[] cstr;
 		return str;
 	}
 
@@ -610,7 +609,7 @@ public:
 	bool read(Checkpoint & checkpoint)
 	{
 		size_t size; if (!checkpoint.read(reinterpret_cast<char *>(&size), sizeof(size))) return false;
-		_set_size(size);
+		_set_size(size, false);
 		if (!checkpoint.read(reinterpret_cast<char *>(_d), _size * sizeof(uint64_t))) return false;
 		return true;
 	}

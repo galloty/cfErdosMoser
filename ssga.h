@@ -17,9 +17,6 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "heap.h"
 
 #define finline	__attribute__((always_inline))
-#ifdef __x86_64
-	#define x64_asm
-#endif
 
 // A vector of l elements, operation are modulo 2^n + 1
 class ModVector
@@ -29,7 +26,7 @@ private:
 	uint64_t * const _buf;
 	uint64_t * const _d;
 
-#ifndef x64_asm
+#ifndef __x86_64
 	finline static uint64_t _addc(const uint64_t x, const uint64_t y, uint64_t & carry)
 	{
 		const __uint128_t t = x + __uint128_t(y) + carry;
@@ -87,7 +84,7 @@ private:
 	// x' = x + y, y' = x - y
 	finline static bool _add_sub(uint64_t * const x, uint64_t * const y, const size_t size)
 	{
-#ifdef x64_asm
+#ifdef __x86_64
 		const size_t size_4 = size / 4;		// size = 4 * size_4 + 1
 		char borrow = 0;
 		asm volatile
@@ -207,7 +204,7 @@ private:
 	// x = y (mod 2^n + 1)
 	finline static void _mod_F(uint64_t * const x, const size_t size, const uint64_t * const y)
 	{
-#ifdef x64_asm
+#ifdef __x86_64
 		char borrow = 0;
 		asm volatile
 		(
@@ -258,7 +255,7 @@ private:
 	 	if (borrow != 0) _add_F(x, size);
 	}
 
-	// y = x << (64 * s_64) (mod 2^n + 1), s_64 < x_size - 1
+	// y = x << (64 * s_64) (mod 2^n + 1), s_64 < size - 1
 	finline static void _lshift_mod_F(uint64_t * const y, const uint64_t * const x, const size_t size, const size_t s_64)
 	{
 		for (size_t i = 0; i < s_64; ++i) y[i] = ~x[size - 1 - s_64 + i];
@@ -275,7 +272,7 @@ private:
 		const bool borrow = _sub(&y[s_64], size - s_64, x[size - 1]); if (borrow) _add_F(y, size);
 	}
 
-	// y = -x << (64 * s_64) (mod 2^n + 1), s_64 < x_size - 1
+	// y = -x << (64 * s_64) (mod 2^n + 1), s_64 < size - 1
 	finline static void _nlshift_mod_F(uint64_t * const y, const uint64_t * const x, const size_t size, const size_t s_64)
 	{
 	 	for (size_t i = 0; i < s_64; ++i) y[i] = x[size - 1 - s_64 + i];
@@ -321,7 +318,8 @@ private:
 	{
 		const size_t size = _size;
 		uint64_t * const d_i = &_d[i * (size + _gap)];
-		mpn_mul_n(mp_ptr(buf), mp_srcptr(d_i), mp_srcptr(&rhs._d[i * (size + _gap)]), mp_size_t(size));
+		if (this == &rhs) mpn_sqr(mp_ptr(buf), mp_srcptr(d_i), mp_size_t(size));
+		else mpn_mul_n(mp_ptr(buf), mp_srcptr(d_i), mp_srcptr(&rhs._d[i * (size + _gap)]), mp_size_t(size));
 		_mod_F(d_i, size, buf);
 	}
 
@@ -329,13 +327,13 @@ private:
 
 public:
 	ModVector(const size_t n, const size_t l) : _size(n / 64 + 1), _n(n), _l(l),
-		_buf(static_cast<uint64_t *>(Heap::get_instance().aligned_alloc(4 * 2 * _size * sizeof(uint64_t)))),
-		_d(static_cast<uint64_t *>(Heap::get_instance().aligned_alloc(l * (_size + _gap) * sizeof(uint64_t)))) {}
+		_buf(Heap::get_instance().alloc_ssg(4 * 2 * _size)),
+		_d(Heap::get_instance().alloc_ssg(l * (_size + _gap))) {}
 	virtual ~ModVector()
 	{
 		Heap & heap = Heap::get_instance();
-		heap.aligned_free(_buf, 4 * 2 * _size * sizeof(uint64_t));
-		heap.aligned_free(_d, _l * (_size + _gap) * sizeof(uint64_t));
+		heap.free_ssg(_buf, 4 * 2 * _size);
+		heap.free_ssg(_d, _l * (_size + _gap));
 	}
 
 	size_t get_size() const { return _size; }
@@ -487,7 +485,7 @@ private:
 	{
 		const size_t M_64 = _M / 64, M_mask = (size_t(1) << (_M % 64)) - 1;
 
-		uint64_t * const r = new uint64_t[M_64 + 2];
+		uint64_t r[M_64 + 2];
 
 		for (size_t j = 0, l = _l; j < l; ++j)
 		{
@@ -515,8 +513,6 @@ private:
 			}
 			else v.set(j, r, 0);
 		}
-
-		delete[] r;
 	}
 
 	// Compute sum of the l slices
@@ -524,7 +520,7 @@ private:
 	{
 		size_t clear_index = 0;
 
-		uint64_t * const r = new uint64_t[v.get_size() + 1];
+		uint64_t r[v.get_size() + 1];
 
 		for (size_t j = 0, l = _l; j < l; ++j)
 		{
@@ -540,17 +536,17 @@ private:
 					{
 						const uint64_t r_i = r[i]; r[i] = (r_i << s) | (prev >> (64 - s)); prev = r_i;
 					}
-					r[r_size] = prev >> (64 - s);
+					const uint64_t next = prev >> (64 - s);
+					if (next != 0) { r[r_size] = next; ++r_size; }
 				}
-				else r[r_size] = 0;
 
-				const size_t prev_clear_index = clear_index; clear_index = std::min(index + r_size + 1, size);
+				const size_t prev_clear_index = clear_index; clear_index = index + r_size;
 				for (size_t i = prev_clear_index; i < clear_index; ++i) x[i] = 0;
-				mpn_add_n(mp_ptr(&x[index]), mp_srcptr(&x[index]), mp_srcptr(r), mp_size_t(clear_index - index));
+				const mp_limb_t carry = mpn_add_n(mp_ptr(&x[index]), mp_srcptr(&x[index]), mp_srcptr(r), mp_size_t(r_size));
+				if (carry != 0) { x[index + r_size] = carry; ++clear_index; }
 			}
 		}
 
-		delete[] r;
 		for (size_t i = clear_index; i < size; ++i) x[i] = 0;
 	}
 

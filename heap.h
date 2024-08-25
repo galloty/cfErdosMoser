@@ -21,22 +21,61 @@ Please give feedback to the authors if improvement is realized. It is distribute
 class Heap
 {
 private:
-	static const size_t min_size = 64 * 1024 / sizeof(uint64_t);
-	size_t _size, _size_other, _size_gmp;
-	size_t _alloc_count, _realloc_count, _free_count, _block_count;
-	size_t _max_size, _max_size_other, _max_size_gmp, _max_block_size, _max_block_count;
+	struct Stat
+	{
+		size_t size, max_size;
+		size_t block_count, max_block_count, max_block_size;
+		size_t alloc_count, realloc_count, free_count;
+
+		Stat() : size(0), max_size(0), block_count(0), max_block_count(0), max_block_size(0), alloc_count(0), realloc_count(0), free_count(0) {}
+
+		void reset()
+		{
+			max_size = size;
+			max_block_count = block_count;
+			max_block_size = 0;
+			alloc_count = realloc_count = free_count = 0;
+		}
+
+		void alloc(const size_t alloc_size)
+		{
+			size += alloc_size;
+			max_size = std::max(max_size, size);
+			block_count += 1;
+			max_block_count = std::max(max_block_count, block_count);
+			max_block_size = std::max(max_block_size, alloc_size);
+			alloc_count += 1;
+		}
+
+		void realloc(const size_t old_alloc_size, const size_t new_alloc_size)
+		{
+			size += new_alloc_size - old_alloc_size;
+			max_size = std::max(max_size, size);
+			max_block_size = std::max(max_block_size, new_alloc_size);
+			realloc_count += 1;
+		}
+
+		void free(const size_t alloc_size)
+		{
+			size -= alloc_size;
+			block_count -= 1;
+			free_count += 1;
+		}
+
+	};
+
+	static const size_t min_size = 256 * 1024 / sizeof(uint64_t);
+
+	Stat _stat_g, _stat_ssg, _stat_gmp;
 	std::queue<uint64_t *> _small_block_queue;
+	// std::queue<std::pair<uint64_t *, size_t>> _gmp_small_block_queue;
 	std::mutex _mtx;
 
 private:
 	struct deleter { void operator()(const Heap * const p) { delete p; } };
 
 public:
-	Heap() : _size(0), _size_other(0), _size_gmp(0), _alloc_count(0), _realloc_count(0), _free_count(0), _block_count(0),
-		_max_size(0), _max_size_other(0), _max_size_gmp(0), _max_block_size(0), _max_block_count(0)
-	{
-		mp_set_memory_functions(_alloc_gmp, _realloc_gmp, _free_gmp);
-	}
+	Heap() { mp_set_memory_functions(_alloc_gmp, _realloc_gmp, _free_gmp); }
 	virtual ~Heap() { mp_set_memory_functions(nullptr, nullptr, nullptr); }
 
 	static Heap & get_instance()
@@ -46,9 +85,17 @@ public:
 	}
 
 private:
+	void _error(const std::string & who, const size_t size) const
+	{
+		std::cout << std::endl << get_memory_info1() << ", " << get_memory_info2() << ", " << get_memory_info3() << std::endl;
+		std::ostringstream ss; ss << who << " failed, " << size << " bytes";
+		throw std::runtime_error(ss.str());
+	}
+
 	static void * _aligned_alloc(const size_t size, const size_t alignment, const size_t offset = 0)
 	{
 		void * const alloc_ptr = std::malloc(size + alignment + offset + sizeof(size_t));
+		if (alloc_ptr == nullptr) return nullptr;
 		const size_t addr = size_t(alloc_ptr) + alignment + sizeof(size_t);
 		size_t * const ptr = (size_t *)(addr - addr % alignment + offset);
 		ptr[-1] = size_t(alloc_ptr);
@@ -61,48 +108,84 @@ private:
 		std::free(alloc_ptr);
 	}
 
-	uint64_t * _alloc(const size_t size)
+	uint64_t * _alloc_g(const size_t size)
 	{
-		++_alloc_count;
-		uint64_t * const ptr = static_cast<uint64_t *>(std::malloc(size * sizeof(uint64_t)));
-		if (ptr == nullptr) throw std::runtime_error("malloc failed");
+		const size_t alloc_size = size * sizeof(uint64_t);
+		_stat_g.alloc(alloc_size);
+
+		uint64_t * const ptr = static_cast<uint64_t *>(std::malloc(alloc_size));
+		if (ptr == nullptr) _error("_alloc_g", alloc_size);
 		return ptr;
 	}
 
-	uint64_t * _realloc(uint64_t * const ptr, const size_t size)
+	uint64_t * _realloc_g(uint64_t * const ptr, const size_t old_size, const size_t new_size)
 	{
-		++_realloc_count;
-		uint64_t * const new_ptr = static_cast<uint64_t *>(std::realloc(static_cast<void *>(ptr), size * sizeof(uint64_t)));
-		if (new_ptr == nullptr) throw std::runtime_error("realloc failed");
+		const size_t old_alloc_size = old_size * sizeof(uint64_t), new_alloc_size = new_size * sizeof(uint64_t);
+		_stat_g.realloc(old_alloc_size, new_alloc_size);
+
+		uint64_t * const new_ptr = static_cast<uint64_t *>(std::realloc(static_cast<void *>(ptr), new_alloc_size));
+		if (new_ptr == nullptr) _error("_realloc_g", new_alloc_size);
 		return new_ptr;
 	}
 
-	void _free(uint64_t * const ptr) { ++_free_count; std::free(static_cast<void *>(ptr)); }
-
-	static void * _alloc_gmp(size_t size)
+	void _free_g(uint64_t * const ptr, const size_t size)
 	{
-		auto & me = get_instance();
-		std::lock_guard<std::mutex> lock(me._mtx);
-		me._size_gmp += size;
-		me._max_size_gmp = std::max(me._max_size_gmp, me._size_gmp);
-		return std::malloc(size);
+		const size_t alloc_size = size * sizeof(uint64_t);
+		_stat_g.free(alloc_size);
+
+		std::free(static_cast<void *>(ptr));
 	}
 
-	static void * _realloc_gmp(void * ptr, size_t old_size, size_t new_size)
+	uint64_t * _alloc_ssg(const size_t size)
 	{
-		auto & me = get_instance();
-		std::lock_guard<std::mutex> lock(me._mtx);
-		me._size_gmp += new_size - old_size;
-		me._max_size_gmp = std::max(me._max_size_gmp, me._size_gmp);
-		return std::realloc(ptr, new_size);
+		const size_t alloc_size = size * sizeof(uint64_t);
+		_stat_ssg.alloc(alloc_size);
+
+		uint64_t * const ptr = static_cast<uint64_t *>(_aligned_alloc(alloc_size, 4096));	// 4kB TLB pages
+		if (ptr == nullptr) _error("_alloc_ssg", alloc_size);
+		return ptr;
 	}
 
-	static void _free_gmp(void * ptr, size_t size)
+	void _free_ssg(uint64_t * const ptr, const size_t size)
+	{
+		const size_t alloc_size = size * sizeof(uint64_t);
+		_stat_ssg.free(alloc_size);
+
+		_aligned_free(static_cast<void *>(ptr));
+	}
+
+	static void * _alloc_gmp(size_t alloc_size)
 	{
 		auto & me = get_instance();
 		std::lock_guard<std::mutex> lock(me._mtx);
-		me._size_gmp -= size;
-		if (size > 0) std::free(ptr);
+
+		me._stat_gmp.alloc(alloc_size);
+
+		void * const ptr = std::malloc(alloc_size);
+		if (ptr == nullptr) me._error("_alloc_gmp", alloc_size);
+		return ptr;
+	}
+
+	static void * _realloc_gmp(void * old_ptr, size_t old_alloc_size, size_t new_alloc_size)
+	{
+		auto & me = get_instance();
+		std::lock_guard<std::mutex> lock(me._mtx);
+
+		me._stat_gmp.realloc(old_alloc_size, new_alloc_size);
+
+		void * const new_ptr = std::realloc(old_ptr, new_alloc_size);
+		if (new_ptr == nullptr) me._error("_realloc_gmp", new_alloc_size);
+		return new_ptr;
+	}
+
+	static void _free_gmp(void * ptr, size_t alloc_size)
+	{
+		auto & me = get_instance();
+		std::lock_guard<std::mutex> lock(me._mtx);
+
+		me._stat_gmp.free(alloc_size);
+
+		std::free(ptr);
 	}
 
 	static void get_unit(const size_t size, size_t & divisor, std::string & unit)
@@ -125,113 +208,109 @@ public:
 
 	std::string get_memory_size() const
 	{
-		std::ostringstream ss; ss << _size << " + " << _size_other << " + " << _size_gmp << " B";
+		std::ostringstream ss; ss << _stat_g.size << " + " << _stat_ssg.size << " + " << _stat_gmp.size << " B";
 		return ss.str();
 	}
 
-	std::string get_memory_info() const
+	std::string get_memory_info1() const
 	{
-		const size_t max_size = _max_size * sizeof(uint64_t), max_block_size = _max_block_size * sizeof(uint64_t);
+		const size_t size_g = _stat_g.max_size, size_ssg = _stat_ssg.max_size, size_gmp = _stat_gmp.max_size;
+		const size_t block_size_g =  _stat_g.max_block_size, block_size_ssg = _stat_ssg.max_block_size, block_size_gmp = _stat_gmp.max_block_size;
 
-		size_t size_divisor; std::string size_unit; get_unit(std::max(std::max(max_size, _max_size_other), _max_size_gmp), size_divisor, size_unit);
-		size_t block_size_divisor; std::string block_size_unit; get_unit(max_block_size, block_size_divisor, block_size_unit);
+		size_t size_divisor; std::string size_unit; get_unit(std::max(std::max(size_g, size_ssg), size_gmp), size_divisor, size_unit);
+		size_t block_size_divisor; std::string block_size_unit; get_unit(std::max(std::max(block_size_g, block_size_ssg), block_size_gmp), block_size_divisor, block_size_unit);
 
 		std::ostringstream ss;
-		ss << "max size: " << max_size / size_divisor << " + " << _max_size_other / size_divisor << " + " << _max_size_gmp / size_divisor << " " << size_unit << ", "
-			<< "max block size: " << max_block_size / block_size_divisor << " " << block_size_unit << ", "
-			<< "alloc: " << _alloc_count << ", realloc: " << _realloc_count << ", free: " << _free_count << ", max block count: " << _max_block_count
-			<< " (" << _small_block_queue.size() << ")";
+		ss	<< "max size: " << size_g / size_divisor << " + " << size_ssg / size_divisor << " + " << size_gmp / size_divisor << " " << size_unit << ", "
+			<< "max block size: " << block_size_g / block_size_divisor << " + " << block_size_ssg / block_size_divisor
+			<< " + " << block_size_gmp / block_size_divisor << " " << block_size_unit;
+		return ss.str();
+	}
+
+	std::string get_memory_info2() const
+	{
+		std::ostringstream ss;
+		ss	<< "alloc: " << _stat_g.alloc_count << " + " << _stat_ssg.alloc_count << " + " << _stat_gmp.alloc_count << ", "
+			<< "realloc: " << _stat_g.realloc_count << " + " << _stat_ssg.realloc_count << " + " << _stat_gmp.realloc_count << ", "
+			<< "free: " << _stat_g.free_count << " + " << _stat_ssg.free_count << " + " << _stat_gmp.free_count;
+		return ss.str();
+	}
+
+	std::string get_memory_info3() const
+	{
+		const size_t queue_size = _small_block_queue.size() * min_size;
+		size_t size_divisor; std::string size_unit; get_unit(queue_size, size_divisor, size_unit);
+
+		std::ostringstream ss;
+		ss	<< "max block count: " << _stat_g.max_block_count << " + " << _stat_ssg.max_block_count << " + " << _stat_gmp.max_block_count << ", "
+			<< "queue: " << _small_block_queue.size() << " (" << queue_size / size_divisor << " " << size_unit << ")";
 		return ss.str();
 	}
 
 	std::string get_memory_usage() const
 	{
-		const size_t max_size = _max_size * sizeof(uint64_t);
-		size_t size_divisor; std::string size_unit; get_unit(std::max(std::max(max_size, _max_size_other), _max_size_gmp), size_divisor, size_unit);
-		std::ostringstream ss; ss << max_size / size_divisor << " + " << _max_size_other / size_divisor << " + " << _max_size_gmp / size_divisor << " " << size_unit;
+		const size_t size_g = _stat_g.max_size, size_ssg = _stat_ssg.max_size, size_gmp = _stat_gmp.max_size;
+		size_t size_divisor; std::string size_unit; get_unit(std::max(std::max(size_g, size_ssg), size_gmp), size_divisor, size_unit);
+		std::ostringstream ss; ss << size_g / size_divisor << " + " << size_ssg / size_divisor << " + " << size_gmp / size_divisor << " " << size_unit << ")";
 		return ss.str();
 	}
 
-	size_t get_max_mem_size() const { return _max_size * sizeof(uint64_t) + _max_size_other + _max_size_gmp; }
+	size_t get_max_mem_size() const { return _stat_g.max_size + _stat_ssg.max_size + _stat_gmp.max_size; }
 
 	void reset()
 	{
-		_alloc_count = _realloc_count = _free_count = 0;
-		_max_size = _max_size_other = _max_size_gmp = 0;
-		_max_block_size = 0;
-		_max_block_count = _block_count;
-
 		while (!_small_block_queue.empty())
 		{
 			uint64_t * const ptr = _small_block_queue.front();
 			_small_block_queue.pop();
-			std::free(static_cast<void *>(ptr));
+			_free_g(ptr, min_size);
 		}
+
+		_stat_g.reset(); _stat_ssg.reset(); _stat_gmp.reset();
 	}
 
-	uint64_t * alloc(const size_t size)
+	uint64_t * alloc_g(const size_t size)
 	{
-		_size += size;
-
- 		++_block_count;
-		_max_size = std::max(_max_size, _size);
-		_max_block_size = std::max(_max_block_size, size);
-		_max_block_count = std::max(_max_block_count, _block_count);
-
 		if ((size == min_size) && !_small_block_queue.empty())
 		{
 			uint64_t * const ptr = _small_block_queue.front(); _small_block_queue.pop();
 			return ptr;
 		}
 
-		return _alloc(size);
+		return _alloc_g(size);
 	}
 
-	uint64_t * realloc(uint64_t * const ptr, const size_t old_size, const size_t new_size)
+	uint64_t * realloc_g(uint64_t * const ptr, const size_t old_size, const size_t new_size, const bool copy)
 	{
 		if (old_size == new_size) return ptr;
-
-		_size += new_size - old_size;
-		_max_size = std::max(_max_size, _size);
-		_max_block_size = std::max(_max_block_size, new_size);
 
 		if ((new_size == min_size) && !_small_block_queue.empty())
 		{
 			uint64_t * const new_ptr = _small_block_queue.front(); _small_block_queue.pop();
-			for (size_t i = 0; i < min_size; ++i) new_ptr[i] = ptr[i];
-			_free(ptr);
+			if (copy) for (size_t i = 0, n = std::min(new_size, old_size); i < n; ++i) new_ptr[i] = ptr[i];
+			_free_g(ptr, old_size);	// because new_size = min_size != old_size
 			return new_ptr;
 		}
 
 		if (old_size == min_size)
 		{
-			uint64_t * const new_ptr = _alloc(new_size);
-			for (size_t i = 0; i < min_size; ++i) new_ptr[i] = ptr[i];
+			uint64_t * const new_ptr = _alloc_g(new_size);	// because new_size != old_size = min_size
+			if (copy) for (size_t i = 0, n = std::min(new_size, old_size); i < n; ++i) new_ptr[i] = ptr[i];
 			_small_block_queue.push(ptr);
 			return new_ptr;
 		}
 
-		return _realloc(ptr, new_size);
+		if (copy) return _realloc_g(ptr, old_size, new_size);
+		_free_g(ptr, old_size);
+		return _alloc_g(new_size);
 	}
 
-	void free(uint64_t * const ptr, const size_t size)
+	void free_g(uint64_t * const ptr, const size_t size)
 	{
-		_size -= size;
-		--_block_count;
-
 		if (size == min_size) _small_block_queue.push(ptr);
-		else _free(ptr);
+		else _free_g(ptr, size);
 	}
 
-	void * aligned_alloc(const size_t size)
-	{
-		_size_other += size;
-		_max_size_other = std::max(_max_size_other, _size_other);
-
-		void * const ptr = _aligned_alloc(size, 4096);	// 4kB TLB pages
-		if (ptr == nullptr) throw std::runtime_error("malloc failed");
-		return ptr;
-	}
-
-	void aligned_free(void * const ptr, const size_t size) { _size_other -= size; _aligned_free(ptr); }
+	uint64_t * alloc_ssg(const size_t size) { return _alloc_ssg(size); }
+	void free_ssg(uint64_t * const ptr, const size_t size) { _free_ssg(ptr, size); }
 };
