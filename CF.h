@@ -522,8 +522,9 @@ public:
 		}
 
 		_N.clear(); _cond_b.clear(); _a_j.clear(); M.clear();
+		if (_verbose) std::cout << "Memory size: " << heap.get_memory_size() << ", ";
 		heap.reset();
-		if (_verbose) std::cout << "Memory size: " << heap.get_memory_size() << "." << std::endl;
+		if (_verbose) std::cout << heap.get_memory_size() << "." << std::endl;
 		return !_quit;
 	}
 };

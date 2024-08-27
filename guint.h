@@ -30,18 +30,18 @@ private:
 private:
 	void _alloc(const size_t size)
 	{
-		_alloc_size = Heap::get_min_size(size);
-		_d = Heap::get_instance().alloc_g(_alloc_size);
+		_alloc_size = size;
+		_d = Heap::get_instance().alloc(_alloc_size);
 	}
 
 	void _realloc(const size_t size, const bool copy)
 	{
-		const size_t alloc_size = Heap::get_min_size(size);
-		_d = Heap::get_instance().realloc_g(_d, _alloc_size, alloc_size, copy);
-		_alloc_size = alloc_size;
+		size_t new_alloc_size = size;
+		_d = Heap::get_instance().realloc(_d, _alloc_size, new_alloc_size, copy);
+		_alloc_size = new_alloc_size;
 	}
 
-	void _free() { Heap::get_instance().free_g(_d, _alloc_size); }
+	void _free() { Heap::get_instance().free(_d, _alloc_size); }
 
 	void _set_size(const size_t size, const bool copy = true) { _size = size; if (size > _alloc_size) _realloc(size, copy); }
 	void _clear() { _size = 0; _realloc(_size, false); }

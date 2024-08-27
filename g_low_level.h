@@ -9,14 +9,13 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <cstdint>
 
-// #define GMP_MPN	true	// Must be 64-bit GMP
+// #define GMP_MPN	true	// 64-bit GMP is required. Low-level functions are implemented using GMP: on Windows, mpn has limit of 2^(31 + 6) bits (41 billion digits).
 
 #include <gmp.h>
 
-#ifdef GMP_MPN
-// Low-level functions are implemented using GMP. On Windows, mpn has limit of 2^(31 + 6) bits (41 billion digits).
-#else
+#ifndef GMP_MPN
 
+#ifndef __x86_64
 inline uint64_t _addc(const uint64_t x, const uint64_t y, uint64_t & carry)
 {
 	const __uint128_t t = x + __uint128_t(y) + carry;
@@ -24,12 +23,13 @@ inline uint64_t _addc(const uint64_t x, const uint64_t y, uint64_t & carry)
 	return uint64_t(t);
 }
 
-inline uint64_t _subb(const uint64_t x, const uint64_t y, uint64_t & borrow)
+inline uint64_t _subb(const uint64_t x, const uint64_t y, int64_t & borrow)
 {
-	const __uint128_t t = x - __uint128_t(y) - borrow;
-	borrow = uint64_t(t >> 64) & 1;
+	const __int128_t t = x - __int128_t(y) + borrow;
+	borrow = int64_t(t >> 64);
 	return uint64_t(t);
 }
+#endif
 
 inline uint64_t _mulc(const uint64_t x, const uint64_t y, uint64_t & carry)
 {
@@ -204,10 +204,76 @@ inline uint64_t g_add(uint64_t * const z, const uint64_t * const x, const size_t
 #ifdef GMP_MPN
 	return (uint64_t)mpn_add(mp_ptr(z), mp_srcptr(x), mp_size_t(x_size), mp_srcptr(y), mp_size_t(y_size));
 #else
-	uint64_t carry = 0;
-#ifdef __x86_64x
+#ifdef __x86_64
+	unsigned char carry = 0;
+	asm volatile
+	(
+		"movq	%[y_size], %%rcx\n\t"
+		"movq	%[x], %%rsi\n\t"
+		"movq	%[y], %%rbx\n\t"
+		"movq	%[z], %%rdi\n\t"
+		"movq	%%rcx, %%rdx\n\t"
+		"shrq	$2, %%rcx\n\t"
+		"andq	$3, %%rdx\n\t"
+		"incq	%%rdx\n\t"
+		"testq	%%rcx, %%rcx\n\t"
+		"clc\n\t"
+
+		"jz		enda%=\n\t"
+
+		"loopa%=:\n\t"
+		"movq	(%%rsi), %%rax\n\t"
+		"adcq	(%%rbx), %%rax\n\t"
+		"movq	%%rax, (%%rdi)\n\t"
+		"movq	8(%%rsi), %%rax\n\t"
+		"adcq	8(%%rbx), %%rax\n\t"
+		"movq	%%rax, 8(%%rdi)\n\t"
+		"movq	16(%%rsi), %%rax\n\t"
+		"adcq	16(%%rbx), %%rax\n\t"
+		"movq	%%rax, 16(%%rdi)\n\t"
+		"movq	24(%%rsi), %%rax\n\t"
+		"adcq	24(%%rbx), %%rax\n\t"
+		"movq	%%rax, 24(%%rdi)\n\t"
+
+		"leaq	32(%%rsi), %%rsi\n\t"
+		"leaq	32(%%rbx), %%rbx\n\t"
+		"leaq	32(%%rdi), %%rdi\n\t"
+		"decq	%%rcx\n\t"
+		"jnz	loopa%=\n\t"
+		"enda%=:\n\t"
+
+		"decq	%%rdx\n\t"
+		"jz		endb%=\n\t"
+
+		"movq	(%%rsi), %%rax\n\t"
+		"adcq	(%%rbx), %%rax\n\t"
+		"movq	%%rax, (%%rdi)\n\t"
+
+		"decq	%%rdx\n\t"
+		"jz		endb%=\n\t"
+
+		"movq	8(%%rsi), %%rax\n\t"
+		"adcq	8(%%rbx), %%rax\n\t"
+		"movq	%%rax, 8(%%rdi)\n\t"
+
+		"decq	%%rdx\n\t"
+		"jz		endb%=\n\t"
+
+		"movq	16(%%rsi), %%rax\n\t"
+		"adcq	16(%%rbx), %%rax\n\t"
+		"movq	%%rax, 16(%%rdi)\n\t"
+
+		"endb%=:\n\t"
+		"setc	%[carry]\n\t"
+
+		: [carry] "=rm" (carry)
+		: [x] "rm" (x), [y] "rm" (y), [z] "rm" (z), [y_size] "rm" (y_size)
+		: "rax", "rbx", "rcx", "rdx", "rsi", "rdi", "cc", "memory"
+	);
 #else
+	uint64_t carry = 0;
 	for (size_t i = 0; i < y_size; ++i) z[i] = _addc(x[i], y[i], carry);
+#endif
 	size_t i = y_size;
 	for (; i < x_size; ++i)
 	{
@@ -216,8 +282,7 @@ inline uint64_t g_add(uint64_t * const z, const uint64_t * const x, const size_t
 		carry = (z_i == 0) ? 1 : 0;
 	}
 	if (z != x) { for (; i < x_size; ++i) z[i] = x[i]; }
-#endif
-	return carry;
+	return uint64_t(carry);
 #endif
 }
 
@@ -227,8 +292,76 @@ inline void g_sub(uint64_t * const z, const uint64_t * const x, const size_t x_s
 #ifdef GMP_MPN
 	mpn_sub(mp_ptr(z), mp_srcptr(x), mp_size_t(x_size), mp_srcptr(y), mp_size_t(y_size));
 #else
-	uint64_t borrow = 0;
+#ifdef __x86_64
+	unsigned char borrow = 0;
+	asm volatile
+	(
+		"movq	%[y_size], %%rcx\n\t"
+		"movq	%[x], %%rsi\n\t"
+		"movq	%[y], %%rbx\n\t"
+		"movq	%[z], %%rdi\n\t"
+		"movq	%%rcx, %%rdx\n\t"
+		"shrq	$2, %%rcx\n\t"
+		"andq	$3, %%rdx\n\t"
+		"incq	%%rdx\n\t"
+		"testq	%%rcx, %%rcx\n\t"
+		"clc\n\t"
+
+		"jz		enda%=\n\t"
+
+		"loopa%=:\n\t"
+		"movq	(%%rsi), %%rax\n\t"
+		"sbbq	(%%rbx), %%rax\n\t"
+		"movq	%%rax, (%%rdi)\n\t"
+		"movq	8(%%rsi), %%rax\n\t"
+		"sbbq	8(%%rbx), %%rax\n\t"
+		"movq	%%rax, 8(%%rdi)\n\t"
+		"movq	16(%%rsi), %%rax\n\t"
+		"sbbq	16(%%rbx), %%rax\n\t"
+		"movq	%%rax, 16(%%rdi)\n\t"
+		"movq	24(%%rsi), %%rax\n\t"
+		"sbbq	24(%%rbx), %%rax\n\t"
+		"movq	%%rax, 24(%%rdi)\n\t"
+
+		"leaq	32(%%rsi), %%rsi\n\t"
+		"leaq	32(%%rbx), %%rbx\n\t"
+		"leaq	32(%%rdi), %%rdi\n\t"
+		"decq	%%rcx\n\t"
+		"jnz	loopa%=\n\t"
+		"enda%=:\n\t"
+
+		"decq	%%rdx\n\t"
+		"jz		endb%=\n\t"
+
+		"movq	(%%rsi), %%rax\n\t"
+		"sbbq	(%%rbx), %%rax\n\t"
+		"movq	%%rax, (%%rdi)\n\t"
+
+		"decq	%%rdx\n\t"
+		"jz		endb%=\n\t"
+
+		"movq	8(%%rsi), %%rax\n\t"
+		"sbbq	8(%%rbx), %%rax\n\t"
+		"movq	%%rax, 8(%%rdi)\n\t"
+
+		"decq	%%rdx\n\t"
+		"jz		endb%=\n\t"
+
+		"movq	16(%%rsi), %%rax\n\t"
+		"sbbq	16(%%rbx), %%rax\n\t"
+		"movq	%%rax, 16(%%rdi)\n\t"
+
+		"endb%=:\n\t"
+		"setc	%[borrow]\n\t"
+
+		: [borrow] "=rm" (borrow)
+		: [x] "rm" (x), [y] "rm" (y), [z] "rm" (z), [y_size] "rm" (y_size)
+		: "rax", "rbx", "rcx", "rdx", "rsi", "rdi", "cc", "memory"
+	);
+#else
+	int64_t borrow = 0;
 	for (size_t i = 0;  i < y_size; ++i) z[i] = _subb(x[i], y[i], borrow);
+#endif
 	size_t i = y_size;
 	for (; i < x_size; ++i)
 	{

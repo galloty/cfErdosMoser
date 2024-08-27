@@ -81,7 +81,7 @@ private:
 #endif
 
 		std::ostringstream ss;
-		ss << "cfErdosMoser 24.07.0 " << sysver << ssc.str() << std::endl;
+		ss << "cfErdosMoser 24.08.0 " << sysver << ssc.str() << std::endl;
 		ss << "Copyright (c) 2024, Yves Gallot" << std::endl;
 		ss << "cfErdosMoser is free source code, under the MIT license." << std::endl << std::endl;
 		return ss.str();
@@ -173,6 +173,11 @@ int main(int argc, char * argv[])
 	catch (const std::runtime_error & e)
 	{
 		std::cerr << std::endl << "Error: " << e.what() << "." << std::endl << std::flush;
+		return EXIT_FAILURE;
+	}
+	catch (...)
+	{
+		std::cerr << std::endl << "Error: unknown reason." << std::endl << std::flush;
 		return EXIT_FAILURE;
 	}
 

@@ -23,8 +23,9 @@ class ModVector
 {
 private:
 	const size_t _size, _n, _l;
-	uint64_t * const _buf;
-	uint64_t * const _d;
+	size_t _buf_size, _d_size;
+	uint64_t * _buf;
+	uint64_t * _d;
 
 #ifndef __x86_64
 	finline static uint64_t _addc(const uint64_t x, const uint64_t y, uint64_t & carry)
@@ -86,7 +87,7 @@ private:
 	{
 #ifdef __x86_64
 		const size_t size_4 = size / 4;		// size = 4 * size_4 + 1
-		char borrow = 0;
+		unsigned char borrow = 0;
 		asm volatile
 		(
 			"movq	%[size_4], %%rcx\n\t"
@@ -205,7 +206,7 @@ private:
 	finline static void _mod_F(uint64_t * const x, const size_t size, const uint64_t * const y)
 	{
 #ifdef __x86_64
-		char borrow = 0;
+		unsigned char borrow = 0;
 		asm volatile
 		(
 			"movq	%[size], %%rcx\n\t"
@@ -326,14 +327,20 @@ private:
 	static const size_t _gap = 7;	// Cache line size is 64 bytes
 
 public:
-	ModVector(const size_t n, const size_t l) : _size(n / 64 + 1), _n(n), _l(l),
-		_buf(Heap::get_instance().alloc_ssg(4 * 2 * _size)),
-		_d(Heap::get_instance().alloc_ssg(l * (_size + _gap))) {}
+	ModVector(const size_t n, const size_t l) : _size(n / 64 + 1), _n(n), _l(l)
+	{
+		Heap & heap = Heap::get_instance();
+		_buf_size = 4 * 2 * _size;
+		_buf = heap.alloc(_buf_size);
+		_d_size = l * (_size + _gap);
+		_d = heap.alloc_ssg(_d_size);
+	}
+
 	virtual ~ModVector()
 	{
 		Heap & heap = Heap::get_instance();
-		heap.free_ssg(_buf, 4 * 2 * _size);
-		heap.free_ssg(_d, _l * (_size + _gap));
+		heap.free(_buf, _buf_size);
+		heap.free_ssg(_d, _d_size);
 	}
 
 	size_t get_size() const { return _size; }
