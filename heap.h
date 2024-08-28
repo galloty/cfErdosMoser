@@ -268,7 +268,7 @@ public:
 	{
 		const size_t size_g = _stat_g.max_size, size_ssg = _stat_ssg.max_size, size_gmp = _stat_gmp.max_size;
 		size_t size_divisor; std::string size_unit; get_unit(std::max(std::max(size_g, size_ssg), size_gmp), size_divisor, size_unit);
-		std::ostringstream ss; ss << size_g / size_divisor << " + " << size_ssg / size_divisor << " + " << size_gmp / size_divisor << " " << size_unit << ")";
+		std::ostringstream ss; ss << size_g / size_divisor << " + " << size_ssg / size_divisor << " + " << size_gmp / size_divisor << " " << size_unit;
 		return ss.str();
 	}
 
