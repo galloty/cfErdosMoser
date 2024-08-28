@@ -485,10 +485,10 @@ public:
 
 				std::ostringstream ss;
 				const double elapsed_time = t0 + std::chrono::duration<double>(now - start_time).count();
-				ss	<< format_time(elapsed_time) << ": q_j = " << _q_j.to_string() << ", n = " << n << " [" << nstep << "], "
-					<< "j = " << _j << " (dj/dt = " << int((_j - j_prev) / dt) << ")";
+				ss	<< format_time(elapsed_time) << ": q_j=" << _q_j.to_string() << ", n=" << n << " [" << nstep << "], "
+					<< "j=" << _j << " (+" << int((_j - j_prev) / dt) << "/s)";
 				const double bytes_j = double(heap.get_max_mem_size()) / _j;
-				if (!_verbose) ss << ", mem usage: " << heap.get_memory_usage() << ", " << std::setprecision(3) << bytes_j << " B/j";
+				if (!_verbose) ss << ", mem: " << heap.get_memory_usage() << ", " << std::setprecision(3) << bytes_j << "B/j";
 				ss << ".";
 				j_prev = _j;
 
