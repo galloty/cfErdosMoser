@@ -12,4 +12,4 @@ build: $(EXEC)
 clean:
 
 $(EXEC): $(SRC_DIR)/*.cpp $(SRC_DIR)/*.h
-	$(CC) $(CFLAGS) $(RFLAGS) -static cfErdosMoser.cpp -lgmp -o $@
+	$(CC) $(CFLAGS) $(RFLAGS) cfErdosMoser.cpp -lgmp -o $@
