@@ -62,7 +62,7 @@ public:
 		int e = 0;
 		if (_exponent > rhs._exponent) e = int(rhs._exponent - _exponent);
 		if (_exponent < rhs._exponent) e = -int(_exponent - rhs._exponent);
-		_mantissa += std::ldexpl(rhs._mantissa, e);
+		_mantissa += ::ldexpl(rhs._mantissa, e);
 		_norm();
 		return *this;
 	}
@@ -81,7 +81,7 @@ public:
 		// convert to base 10
 		const int sgn = (_mantissa < 0) ? -1 : 1;
 		const double m = std::fabs(_mantissa);
-		const long double lg10 = std::log10l(m) + _exponent * std::log10l(2.0L);
+		const long double lg10 = ::log10l(m) + _exponent * ::log10l(2.0L);
 		size_t exponent10 = uint64_t(lg10); double mantissa10 = std::pow(10.0, double(lg10 - exponent10));
 		while (mantissa10 < 1) { mantissa10 *= 10; --exponent10; if (exponent10 == 0) break; }
 		while (mantissa10 >= 10) { mantissa10 *= 0.1; ++exponent10; }

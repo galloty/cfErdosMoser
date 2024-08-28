@@ -363,7 +363,7 @@ private:
 			_str_size = str.size();
 		}
 
-		std::cout << str;
+		std::cout << str << std::flush;
 		std::ofstream logfile("cflog.txt", std::ios::app);
 		if (logfile.is_open())
 		{

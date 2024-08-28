@@ -587,7 +587,7 @@ public:
 		// base 2
 		long double mantissa; size_t exponent;
 		if (size == 1) { mantissa = _d[0]; exponent = 0; }
-		else { mantissa = std::ldexpl(_d[size - 1], 64) + _d[size - 2]; exponent = (size - 2) * 64; };
+		else { mantissa = ::ldexpl(_d[size - 1], 64) + _d[size - 2]; exponent = (size - 2) * 64; };
 		while (mantissa >= 1) { mantissa *= 0.5; ++exponent; }
 		return gfloat(mantissa, exponent);
 	}
