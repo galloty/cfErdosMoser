@@ -373,19 +373,19 @@ inline void g_sub(uint64_t * const z, const uint64_t * const x, const size_t x_s
 #endif
 }
 
-// x_size >= y_size > 0, z_size = x_size + y_size
+// x_size >= y_size > 0, z_size = x_size + y_size, z != x, z != y
 inline void g_mul(uint64_t * const z, const uint64_t * const x, const size_t x_size, const uint64_t * const y, const size_t y_size)
 {
 	mpn_mul(mp_ptr(z), mp_srcptr(x), mp_size_t(x_size), mp_srcptr(y), mp_size_t(y_size));
 }
 
-// size > 0, z_size = 2 * x_size
+// size > 0, z_size = 2 * x_size, z != x
 inline void g_mul(uint64_t * const z, const uint64_t * const x, const uint64_t * const y, const size_t size)
 {
 	mpn_mul_n(mp_ptr(z), mp_srcptr(x), mp_srcptr(y), mp_size_t(size));
 }
 
-// size > 0, z_size = 2 * x_size
+// size > 0, z_size = 2 * x_size, z != x
 inline void g_sqr(uint64_t * const z, const uint64_t * const x, const size_t size)
 {
 	mpn_sqr(mp_ptr(z), mp_srcptr(x), mp_size_t(size));

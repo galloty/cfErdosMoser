@@ -83,6 +83,16 @@ public:
 		return *this;
 	}
 
+	gint & operator*=(const gint & rhs)
+	{
+		_u *= rhs._u;
+		_is_positive = (_is_positive == rhs._is_positive);
+		return *this;
+
+	}
+
+	gint & operator*=(const guint & rhs) { _u *= rhs; return *this; }
+
 	gint & lshift(const size_t n) { _u.lshift(n); return *this; }
 	gint & rshift(const size_t n) { _u.rshift(n); return *this; }
 

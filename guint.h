@@ -270,59 +270,12 @@ public:
 		_set_size(zsize, false);
 		uint64_t * const d = _d;
 
-		const size_t fmin_size = 4096;
 		if (ysize == 1) d[zsize - 1] = g_mul_1(d, xd, xsize, yd[0]);
-		else if (zsize < fmin_size) g_mul(d, xd, xsize, yd, ysize);
+		else if (zsize < 4096) g_mul(d, xd, xsize, yd, ysize);
 		else
 		{
-			if (xsize < 2 * ysize)
-			{
-				unsigned int k = 0;	size_t M, ns; SSG::get_best_param(64 * zsize, k, M, ns);
-				SSG ssg(k, M, ns); ssg.set_y(yd, ysize); ssg.mul_xy(xd, xsize); ssg.get_x(d, zsize);
-			}
-			else
-			{
-				const size_t n = xsize / ysize, n_r = xsize % ysize;	// n >= 2
-				guint t(2 * ysize), c(ysize);
-				uint64_t * const td = t._d; uint64_t * const cd = c._d;
-				if (ysize >= fmin_size / 2)
-				{
-					unsigned int k = 0;	size_t M, ns; SSG::get_best_param(64 * 2 * ysize, k, M, ns);
-					SSG ssg(k, M, ns); ssg.set_y(yd, ysize);
-
-					g_zero(cd, ysize);
-					for (size_t i = 0; i < n; ++i)
-					{
-						ssg.mul_xy(&xd[i * ysize], ysize); ssg.get_x(td, 2 * ysize);
-						const uint64_t carry = g_add(&d[i * ysize], td, ysize, cd, ysize);
-						g_copy(cd, &td[ysize], ysize);
-						g_add_1(cd, ysize, carry);
-					}
-					if (n_r > 0)
-					{
-						ssg.mul_xy(&xd[n * ysize], n_r); ssg.get_x(td, ysize + n_r);
-						g_add(&d[n * ysize], td, ysize + n_r, cd, ysize);
-					}
-					else g_copy(&d[n * ysize], cd, ysize);
-				}
-				else
-				{
-					g_zero(cd, ysize);
-					for (size_t i = 0; i < n; ++i)
-					{
-						g_mul(td, yd, &xd[i * ysize], ysize);
-						const uint64_t carry = g_add(&d[i * ysize], td, ysize, cd, ysize);
-						g_copy(cd, &td[ysize], ysize);
-						g_add_1(cd, ysize, carry);
-					}
-					if (n_r > 0)
-					{
-						g_mul(td, yd, ysize, &xd[n * ysize], n_r);
-						g_add(&d[n * ysize], td, ysize + n_r, cd, ysize);
-					}
-					else g_copy(&d[n * ysize], cd, ysize);
-				}
-			}
+			unsigned int k = 0;	size_t M, ns; SSG::get_best_param(64 * zsize, k, M, ns);
+			SSG ssg(k, M, ns); ssg.set_y(yd, ysize); ssg.mul_xy(xd, xsize); ssg.get_x(d, zsize);
 		}
 
 		if (d[zsize - 1] == 0) _set_size(zsize - 1);
@@ -339,9 +292,8 @@ public:
 		_set_size(zsize, false);
 		uint64_t * const d = _d;
 
-		const size_t fmin_size = 4096;
 		if (xsize == 1) d[zsize - 1] = g_mul_1(d, xd, xsize, xd[0]);
-		else if (zsize < fmin_size) g_sqr(d, xd, xsize);
+		else if (zsize < 4096) g_sqr(d, xd, xsize);
 		else
 		{
 			unsigned int k = 0;	size_t M, ns; SSG::get_best_param(64 * zsize, k, M, ns);
@@ -352,7 +304,31 @@ public:
 		return *this;
 	}
 
-	guint & operator*=(const guint & rhs) { guint t(_size + rhs._size); t.mul(*this, rhs); swap(t); return *this; }
+	guint & operator*=(const guint & rhs)
+	{
+		if (_size == 0) return *this;
+		if (rhs._size == 0) { *this = 0; return *this; }
+		if (_size == 1) { guint t(rhs); t *= _d[0]; swap(t); return *this; }
+		if (rhs._size == 1) { *this *= rhs._d[0]; return *this; }
+
+		const size_t zsize = _size + rhs._size;
+		if (zsize < 4096)
+		{
+			guint t(zsize); t._set_size(zsize, false);
+			if (_size >= rhs._size) g_mul(t._d, _d, _size, rhs._d, rhs._size);
+			else g_mul(t._d, rhs._d, rhs._size, _d, _size);
+			swap(t);
+		}
+		else
+		{
+			unsigned int k = 0;	size_t M, ns; SSG::get_best_param(64 * zsize, k, M, ns);
+			SSG ssg(k, M, ns); ssg.set_y(rhs._d, rhs._size); ssg.mul_xy(_d, _size);
+			_set_size(zsize, false); ssg.get_x(_d, zsize);
+		}
+
+		if (_d[zsize - 1] == 0) _set_size(zsize - 1);
+		return *this;
+	}
 
 	guint & lshift(const size_t n)
 	{

@@ -28,6 +28,7 @@ public:
 	const guint & get21() const { return _a21; }
 	const guint & get22() const { return _a22; }
 
+	size_t get_max_size() const { return std::max(std::max(_a11.get_size(), _a12.get_size()), std::max(_a21.get_size(), _a22.get_size())); }
 	size_t get_byte_count() const { return _a11.get_byte_count() + _a12.get_byte_count() + _a21.get_byte_count() + _a22.get_byte_count(); }
 
 	void clear() { _a11.clear(); _a12.clear(); _a21.clear(); _a22.clear();}
@@ -40,14 +41,19 @@ public:
 
 	Mat22u & mul_right(const Mat22u & rhs)
 	{
-		const size_t msize = _a12.get_size() + rhs._a12.get_size();
-		guint t1(msize + 1), t2(msize);
+		const size_t msize = get_max_size() + rhs.get_max_size();
+		guint t1(msize);
 
-		t1.mul(_a11, rhs._a12); t2.mul(_a12, rhs._a22); t1 += t2;
-		t2.mul(_a12, rhs._a21); _a12.swap(t1); t1.mul(_a11, rhs._a11); t1 += t2; _a11.swap(t1);
+		{
+			guint t2(msize);
+			t1.mul(_a11, rhs._a12);
+			_a11 *= rhs._a11; t2.mul(_a12, rhs._a21); _a11 += t2;
+			_a12 *= rhs._a22; _a12 += t1;
 
-		t1.mul(_a21, rhs._a12); t2.mul(_a22, rhs._a22); t1 += t2;
-		t2.mul(_a22, rhs._a21); _a22.swap(t1); t1.mul(_a21, rhs._a11); t1 += t2; _a21.swap(t1);
+			t1.mul(_a21, rhs._a12);
+			_a21 *= rhs._a11; t2.mul(_a22, rhs._a21); _a21 += t2;
+		}
+		_a22 *= rhs._a22; _a22 += t1;
 
 		return *this;
 	}
@@ -89,16 +95,10 @@ public:
 	void set_identity() { _a11 = 1; _a12 = 0; _a21 = 0; _a22 = 1; }
 
 	size_t get_min_size() const { return std::min(std::min(_a11.get_size(), _a12.get_size()), std::min(_a21.get_size(), _a22.get_size())); }
+	size_t get_max_size() const { return std::max(std::max(_a11.get_size(), _a12.get_size()), std::max(_a21.get_size(), _a22.get_size())); }
 	size_t get_byte_count() const { return _a11.get_byte_count() + _a12.get_byte_count() + _a21.get_byte_count() + _a22.get_byte_count(); }
 
 	void clear() { _a11.clear(); _a12.clear(); _a21.clear(); _a22.clear();}
-
-	Mat22 & swap(Mat22 & rhs)
-	{
-		_a11.swap(rhs._a11); _a12.swap(rhs._a12);
-		_a21.swap(rhs._a21); _a22.swap(rhs._a22);
-		return *this;
-	}
 
 	Mat22 & div_exact(const guint & d, const guint & d_inv, const int right_shift)
 	{
@@ -109,28 +109,40 @@ public:
 
 	Mat22 & mul_right(const Mat22u & rhs)
 	{
-		const size_t msize = _a12.get_size() + rhs.get12().get_size();
-		gint t1(msize + 1), t2(msize);
+		const size_t msize = get_max_size() + rhs.get_max_size();
+		gint t1(msize);
 
-		t1.mul(_a11, rhs.get12()); t2.mul(_a12, rhs.get22()); t1 += t2;
-		t2.mul(_a12, rhs.get21()); _a12.swap(t1); t1.mul(_a11, rhs.get11()); t1 += t2; _a11.swap(t1);
+		{
+			gint t2(msize);
+			t1.mul(_a11, rhs.get12());
+			_a11 *= rhs.get11(); t2.mul(_a12, rhs.get21()); _a11 += t2;
+			_a12 *= rhs.get22(); _a12 += t1;
 
-		t1.mul(_a21, rhs.get12()); t2.mul(_a22, rhs.get22()); t1 += t2;
-		t2.mul(_a22, rhs.get21()); _a22.swap(t1); t1.mul(_a21, rhs.get11()); t1 += t2; _a21.swap(t1);
+			t1.mul(_a21, rhs.get12());
+			_a21 *= rhs.get11(); t2.mul(_a22, rhs.get21()); _a21 += t2;
+		}
+		_a22 *= rhs.get22(); _a22 += t1;
 
 		return *this;
 	}
 
 	Mat22 & mul_left(const Mat22 & rhs)
 	{
-		const size_t msize = _a12.get_size() + rhs._a12.get_size();
-		gint t1(msize + 1), t2(msize);
+		const size_t msize = get_max_size() + rhs.get_max_size();
+		gint t1(msize);
 
-		t1.mul(_a11, rhs._a21); t2.mul(_a21, rhs._a22); t1 += t2;
-		t2.mul(_a21, rhs._a12); _a21.swap(t1); t1.mul(_a11, rhs._a11); t1 += t2; _a11.swap(t1);
+		{
+			gint t2(msize);
+			t1.mul(_a11, rhs._a21);
+			_a11 *= rhs._a11;
+			t2.mul(_a21, rhs._a12); _a11 += t2;
+			_a21 *= rhs._a22; _a21 += t1;
 
-		t1.mul(_a12, rhs._a21); t2.mul(_a22, rhs._a22); t1 += t2;
-		t2.mul(_a22, rhs._a12); _a22.swap(t1); t1.mul(_a12, rhs._a11); t1 += t2; _a12.swap(t1);
+			t1.mul(_a12, rhs._a21);
+			_a12 *= rhs._a11;
+			t2.mul(_a22, rhs._a12); _a12 += t2;
+		}
+		_a22 *= rhs._a22; _a22 += t1;
 
 		return *this;
 	}
