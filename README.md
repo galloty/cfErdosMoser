@@ -13,10 +13,9 @@ If *q*<sub>*j*</sub> is a *n*-digit number, memory usage is about 3*n*.
 ## Results
 
 The following table provides the smallest integers *j* satisfying conditions (a), (b) and (c) of Theorem 2 and (d) is checked for *p* &le; 43 such that 3 is a primitive root modulo *p*.  
-2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>2</sup> &middot; 7,
-2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>2</sup> &middot; 7<sup>2</sup> and
-2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>2</sup> &middot; 7<sup>3</sup> can be tested to improve the bound of Theorem 3.
-
+2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>4</sup> &middot; 7,
+2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>4</sup> &middot; 7<sup>2</sup> and
+2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>4</sup> &middot; 7<sup>3</sup> can be tested to improve the bound of Theorem 3.
 
 | *N* | *j*<sub>*N*</sub> | *a*<sub>*j*+1</sub> | *q*<sub>*j*</sub> <span style="font-weight: normal">(rounded down)</span> | *q*<sub>*j*</sub> <span style="font-weight: normal">mod 6</span> | *p*<span style="font-weight: normal">(*q*<sub>*j*</sub>)</span> |
 |:---:| ---:| ---:|:--- |:---:|:--- |
