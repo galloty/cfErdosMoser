@@ -401,17 +401,14 @@ public:
 		// j and n must be odd such that a_11/a21 < a12/a22
 		Mat22 M;
 
-		double t0;
-		const bool resume = read_checkpoint(t0, n, nstep, M);
+		std::ostringstream ssi; ssi << "N = " << N.to_string() << " = " << _Nstr;
+		double t0; const bool resume = read_checkpoint(t0, n, nstep, M);
 		if (resume)
 		{
-			std::cout << "N = " << N.to_string() << " = " << _Nstr << ", resuming from a checkpoint." << std::endl;
+			ssi << ", resuming from a checkpoint";
 		}
 		else
 		{
-			std::ostringstream ss; ss << "N = " << N.to_string() << " = " << _Nstr << "." << std::endl;
-			print(ss.str());
-
 			t0 = 0;
 
 			// j is the index of the convergent of the regular continued fraction.
@@ -426,6 +423,8 @@ public:
 			// p_0 = 0, p_1 = 1, q_0 = q_1 = 2N.
 			M.init_gcf(N);
 		}
+		ssi << ", " << SSG::get_nthreads() << " thread(s)." << std::endl;
+		print(ssi.str());
 
 		double time_gcf_extend = 0, time_gcf_mul = 0, time_gcf_div_invert = 0, time_gcf_div_exact = 0, time_cf_reduce = 0;
 		size_t M_min_size = 0, Mgcf_size = 0, divisor_size = 0, M_max_size = 0;
@@ -485,8 +484,8 @@ public:
 
 				std::ostringstream ss;
 				const double elapsed_time = t0 + std::chrono::duration<double>(now - start_time).count();
-				ss	<< format_time(elapsed_time) << ": q_j=" << _q_j.to_string() << ", n=" << n << " [" << nstep << "], "
-					<< "j=" << _j << " (+" << int((_j - j_prev) / dt) << "/s)";
+				ss	<< format_time(elapsed_time) << ": n=" << n << " [" << nstep << "], "
+					<< "j=" << _j << " (+" << int((_j - j_prev) / dt) << "/s), q_j=" << _q_j.to_string();
 				const double bytes_j = double(heap.get_max_mem_size()) / _j;
 				if (!_verbose) ss << ", mem: " << heap.get_memory_usage() << ", " << std::setprecision(3) << bytes_j << "B/j";
 				ss << ".";

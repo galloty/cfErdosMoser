@@ -93,7 +93,7 @@ private:
 		ss << "Usage: cfErdosMoser <N> [-v]" << std::endl;
 		ss << "  N: compute the regular continued fraction of log(2)/(2N)," << std::endl;
 		ss << "     if N = 0 then check N = 1, 2, 2^2, ..., 2^8, 2^8*3, ..." << std::endl;
-		ss << " -t <n>: number of threads (1 or 4 threads, default: 4)," << std::endl;
+		ss << " -t <n>: number of threads (1, 2, 4 or 8 threads, default: 4)," << std::endl;
 		ss << " -v: verbose mode." << std::endl;
 		return ss.str();
 	}
@@ -103,6 +103,9 @@ public:
 	{
 		std::cout << header();
 		if (argc < 2) std::cout << usage() << std::endl;
+
+		// 1, 2, 4, 8, 16, 32, 64, 128, 256, 768, 2304, 6912, 20736, 62208, 311040, 1555200, 7776000, 38880000, 272160000*, 1905120000*, 13335840000*
+		// 1, 2, 6, 30, 210, 2310, 30030, 510510, 9699690*, 223092870*, 6469693230*, 200560490130*
 
 		const std::string arg1((argc > 1) ? argv[1] : "6912");
 
@@ -120,6 +123,10 @@ public:
 			{
 				const std::string ntstr = ((arg == "-t") && (i + 1 < size)) ? args[++i] : arg.substr(2);
 				nthreads = std::atoi(ntstr.c_str());
+				if (nthreads >= 8) nthreads = 8;
+				else if (nthreads >= 4) nthreads = 4;
+				else if (nthreads >= 2) nthreads = 2;
+				else nthreads = 1;
 			}
 			if (arg == "-v") verbose = true;
 		}
@@ -144,9 +151,18 @@ public:
 			// N_max = 2^8 * 3^5 * 5^4 * 7^3
 			static const std::vector<uint32_t> fN = { 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 5, 5, 5, 5, 7, 7, 7 };
 
-			for (size_t d = 0; d < fN.size(); ++d)
+			for (size_t d = 0; d <= fN.size(); ++d)
 			{
 				N = 1; for (size_t i = 0; i < d; ++i) N *= fN[i];
+				if (!cf.solve(N)) return;
+			}
+
+			// Test primorials
+			static const std::vector<uint32_t> pN = { 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31 };
+
+			for (size_t d = 0; d <= pN.size(); ++d)
+			{
+				N = 1; for (size_t i = 0; i < d; ++i) N *= pN[i];
 				if (!cf.solve(N)) return;
 			}
 

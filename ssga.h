@@ -330,7 +330,7 @@ public:
 	ModVector(const size_t n, const size_t l) : _size(n / 64 + 1), _n(n), _l(l)
 	{
 		Heap & heap = Heap::get_instance();
-		_buf_size = 4 * 2 * _size;
+		_buf_size = 8 * 2 * _size;
 		_buf = heap.alloc(_buf_size);
 		_d_size = l * (_size + _gap);
 		_d = heap.alloc_ssg(_d_size);
@@ -369,62 +369,116 @@ public:
 		for (size_t i = 0; i < m; ++i) { add_sub(j + i + 0 * m, j + i + 1 * m); rshift(j + i + 1 * m, e_2, buf); }
 	}
 
-	void mul_Mersenne(const ModVector & rhs, const size_t m, const size_t j)
+	void mul_Mersenne(const ModVector & rhs, const size_t m)
 	{
 		// We have e = 0, root is 1
-		for (size_t i = 0; i < m; ++i) add_sub(j + i + 0 * m, j + i + 1 * m);
+		for (size_t i = 0; i < m; ++i) add_sub(i + 0 * m, i + 1 * m);
 
 		if (m > 1)
 		{
-			mul_Mersenne(rhs, m / 2, j + 0 * m);	// root of 1 is still 1
-			mul(rhs, m / 2, j + 1 * m, _n, _buf);	// root is -1 = 2^n
+			mul_Mersenne(rhs, m / 2);			// root of 1 is still 1
+			mul(rhs, m / 2, 1 * m, _n, _buf);	// root is -1 = 2^n
 		}
 		else
 		{
-			negacyclic(rhs, j + 0 * m, _buf);
-			negacyclic(rhs, j + 1 * m, _buf);
+			negacyclic(rhs, 0 * m, _buf);
+			negacyclic(rhs, 1 * m, _buf);
 		}
 
-		for (size_t i = 0; i < m; ++i) add_sub(j + i + 0 * m, j + i + 1 * m);
+		for (size_t i = 0; i < m; ++i) add_sub(i + 0 * m, i + 1 * m);
 	}
 
-	void mul_Mersenne_0(const ModVector & rhs, const size_t m, const size_t k, const int nthreads)
+	void mul_Mersenne_1(const ModVector & rhs, const size_t m, const size_t k)
 	{
-		const size_t m_2 = m / 2, n_2 = _n / 2;
+		for (size_t i = 0; i < m; ++i) add_sub(i + 0 * m, i + 1 * m);
+
+		mul_Mersenne(rhs, m / 2);
+		mul(rhs, m / 2, 1 * m, _n, _buf);
+
+		// Components are not halved during the reverse transform then multiply outputs by 1 / 2^k
+		for (size_t i = 0; i < m; ++i) { add_sub(i + 0 * m, i + 1 * m); rshift(i + 0 * m, k, _buf); rshift(i + 1 * m, k, _buf);}
+	}
+
+	void mul_Mersenne_2(const ModVector & rhs, const size_t m, const size_t k)
+	{
+		for (size_t i = 0; i < m; ++i) add_sub(i + 0 * m, i + 1 * m);
+
+#pragma omp parallel
+		{
+			const int thread_id = omp_get_thread_num();
+			if (thread_id == 0) mul_Mersenne(rhs, m / 2);
+			else                mul(rhs, m / 2, 1 * m, _n, &_buf[1 * 2 * _size]);
+		}
+
+		// Components are not halved during the reverse transform then multiply outputs by 1 / 2^k
+		for (size_t i = 0; i < m; ++i) { add_sub(i + 0 * m, i + 1 * m); rshift(i + 0 * m, k, _buf); rshift(i + 1 * m, k, _buf);}
+	}
+
+	void mul_Mersenne_4(const ModVector & rhs, const size_t m, const size_t k)
+	{
+		const size_t m_2 = m / 2, e_2 = _n / 2;
 
 		for (size_t i = 0; i < m_2; ++i)
 		{
 			add_sub(i + 0 * m_2, i + 2 * m_2); add_sub(i + 1 * m_2, i + 3 * m_2);
-			add_sub(i + 0 * m_2, i + 1 * m_2); lshift(i + 3 * m_2, n_2, _buf); add_sub(i + 2 * m_2, i + 3 * m_2);
+			add_sub(i + 0 * m_2, i + 1 * m_2); lshift(i + 3 * m_2, e_2, _buf); add_sub(i + 2 * m_2, i + 3 * m_2);
 		}
 
-		if (nthreads == 4)
-		{
 #pragma omp parallel
 		{
-			const unsigned int thread_id = static_cast<unsigned int>(omp_get_thread_num());
-			if      (thread_id == 0) mul_Mersenne(rhs, m_2 / 2, 0 * m_2);
-			else if (thread_id == 1) mul(rhs, m_2 / 2, 1 * m_2, 2 * n_2, &_buf[1 * 2 * _size]);
-			else if (thread_id == 2) mul(rhs, m_2 / 2, 2 * m_2, 1 * n_2, &_buf[2 * 2 * _size]);
-			else if (thread_id == 3) mul(rhs, m_2 / 2, 3 * m_2, 3 * n_2, &_buf[3 * 2 * _size]);
-		}
-		}
-		else
-		{
-			mul_Mersenne(rhs, m_2 / 2, 0 * m_2);
-			mul(rhs, m_2 / 2, 1 * m_2, 2 * n_2, _buf);
-			mul(rhs, m_2 / 2, 2 * m_2, 1 * n_2, _buf);
-			mul(rhs, m_2 / 2, 3 * m_2, 3 * n_2, _buf);
-
+			const size_t thread_id = static_cast<size_t>(omp_get_thread_num());
+			const size_t bitrev[4] = { 0, 2, 1, 3 };
+			if (thread_id == 0) mul_Mersenne(rhs, m / 4);
+			else                mul(rhs, m / 4, thread_id * m_2, bitrev[thread_id] * e_2, &_buf[thread_id * 2 * _size]);
 		}
 
 		// Components are not halved during the reverse transform then multiply outputs by 1 / 2^k
 		for (size_t i = 0; i < m_2; ++i)
 		{
-			add_sub(i + 0 * m_2, i + 1 * m_2); add_sub(i + 2 * m_2, i + 3 * m_2); rshift(i + 3 * m_2, n_2, _buf);
+			add_sub(i + 0 * m_2, i + 1 * m_2); add_sub(i + 2 * m_2, i + 3 * m_2); rshift(i + 3 * m_2, e_2, _buf);
 			add_sub(i + 0 * m_2, i + 2 * m_2); rshift(i + 0 * m_2, k, _buf); rshift(i + 2 * m_2, k, _buf);
 			add_sub(i + 1 * m_2, i + 3 * m_2); rshift(i + 1 * m_2, k, _buf); rshift(i + 3 * m_2, k, _buf);
 		} 
+	}
+
+	void mul_Mersenne_8(const ModVector & rhs, const size_t m, const size_t k)
+	{
+		const size_t m_2 = m / 2, m_4 = m / 4, e_4 = _n / 4;
+
+		for (size_t i = 0; i < m_2; ++i)
+		{
+			add_sub(i + 0 * m_2, i + 2 * m_2); add_sub(i + 1 * m_2, i + 3 * m_2);
+			add_sub(i + 0 * m_2, i + 1 * m_2); lshift(i + 3 * m_2, 2 * e_4, _buf); add_sub(i + 2 * m_2, i + 3 * m_2);
+		}
+
+		for (size_t i = 0; i < m_4; ++i)
+		{
+			add_sub(i + 0 * m_4, i + 1 * m_4); lshift(i + 3 * m_4, 2 * e_4, _buf); add_sub(i + 2 * m_4, i + 3 * m_4);
+			lshift(i + 5 * m_4, 1 * e_4, _buf); add_sub(i + 4 * m_4, i + 5 * m_4); lshift(i + 7 * m_4, 3 * e_4, _buf); add_sub(i + 6 * m_4, i + 7 * m_4);
+		}
+
+#pragma omp parallel
+		{
+			const size_t thread_id = static_cast<size_t>(omp_get_thread_num());
+			const size_t bitrev[8] = { 0, 4, 2, 6, 1, 5, 3, 7 };
+			if (thread_id == 0) mul_Mersenne(rhs, m / 8);
+			else                mul(rhs, m / 8, thread_id * m_4, bitrev[thread_id] * e_4, &_buf[thread_id * 2 * _size]);
+		}
+
+		for (size_t i = 0; i < m_4; ++i)
+		{
+			add_sub(i + 0 * m_4, i + 1 * m_4); add_sub(i + 2 * m_4, i + 3 * m_4); rshift(i + 3 * m_4, 2 * e_4, _buf);
+			add_sub(i + 4 * m_4, i + 5 * m_4); rshift(i + 5 * m_4, 1 * e_4, _buf); add_sub(i + 6 * m_4, i + 7 * m_4); rshift(i + 7 * m_4, 3 * e_4, _buf);
+		}
+
+		// Components are not halved during the reverse transform then multiply outputs by 1 / 2^k
+		for (size_t i = 0; i < m_2; ++i)
+		{
+			add_sub(i + 0 * m_2, i + 1 * m_2); add_sub(i + 2 * m_2, i + 3 * m_2); rshift(i + 3 * m_2, 2 * e_4, _buf);
+			add_sub(i + 0 * m_2, i + 2 * m_2); rshift(i + 0 * m_2, k, _buf); rshift(i + 2 * m_2, k, _buf);
+			add_sub(i + 1 * m_2, i + 3 * m_2); rshift(i + 1 * m_2, k, _buf); rshift(i + 3 * m_2, k, _buf);
+		}
+
 	}
 
 	void forward(const size_t m, const size_t j, const size_t e, uint64_t * const buf)
@@ -438,43 +492,69 @@ public:
 		}
 	}
 
-	void forward_Mersenne(const size_t m, const size_t j)
+	void forward_Mersenne(const size_t m)
 	{
-		for (size_t i = 0; i < m; ++i) add_sub(j + i + 0 * m, j + i + 1 * m);
+		for (size_t i = 0; i < m; ++i) add_sub(i + 0 * m, i + 1 * m);
 		if (m > 1)
 		{
-			forward_Mersenne(m / 2, j + 0 * m);
-			forward(m / 2, j + 1 * m, _n, _buf);
+			forward_Mersenne(m / 2);
+			forward(m / 2, 1 * m, _n, _buf);
 		}
 	}
 
-	void forward_Mersenne_0(const size_t m, const int nthreads)
+	void forward_Mersenne_2(const size_t m)
 	{
-		const size_t m_2 = m / 2, n_2 = _n / 2;
+		for (size_t i = 0; i < m; ++i) add_sub(i + 0 * m, i + 1 * m);
+
+#pragma omp parallel
+		{
+			const int thread_id = omp_get_thread_num();
+			if (thread_id == 0) forward_Mersenne(m / 2);
+			else                forward(m / 2, 1 * m, _n, &_buf[1 * 2 * _size]);
+		}
+	}
+
+	void forward_Mersenne_4(const size_t m)
+	{
+		const size_t m_2 = m / 2, e_2 = _n / 2;
 
 		for (size_t i = 0; i < m_2; ++i)
 		{
 			add_sub(i + 0 * m_2, i + 2 * m_2); add_sub(i + 1 * m_2, i + 3 * m_2);
-			add_sub(i + 0 * m_2, i + 1 * m_2); lshift(i + 3 * m_2, n_2, _buf); add_sub(i + 2 * m_2, i + 3 * m_2);
+			add_sub(i + 0 * m_2, i + 1 * m_2); lshift(i + 3 * m_2, e_2, _buf); add_sub(i + 2 * m_2, i + 3 * m_2);
 		}
 
-		if (nthreads == 4)
-		{
 #pragma omp parallel
 		{
-			const unsigned int thread_id = static_cast<unsigned int>(omp_get_thread_num());
-			if      (thread_id == 0) forward_Mersenne(m_2 / 2, 0 * m_2);
-			else if (thread_id == 1) forward(m_2 / 2, 1 * m_2, 2 * n_2, &_buf[1 * 2 * _size]);
-			else if (thread_id == 2) forward(m_2 / 2, 2 * m_2, 1 * n_2, &_buf[2 * 2 * _size]);
-			else if (thread_id == 3) forward(m_2 / 2, 3 * m_2, 3 * n_2, &_buf[3 * 2 * _size]);
+			const size_t thread_id = static_cast<size_t>(omp_get_thread_num());
+			const size_t bitrev[4] = { 0, 2, 1, 3 };
+			if (thread_id == 0) forward_Mersenne(m / 4);
+			else                forward(m / 4, thread_id * m_2, bitrev[thread_id] * e_2, &_buf[thread_id * 2 * _size]);
 		}
-		}
-		else
+	}
+
+	void forward_Mersenne_8(const size_t m)
+	{
+		const size_t m_4 = m / 4, e_4 = _n / 4;
+
+		for (size_t i = 0; i < 2 * m_4; ++i)
 		{
-			forward_Mersenne(m_2 / 2, 0 * m_2);
-			forward(m_2 / 2, 1 * m_2, 2 * n_2, _buf);
-			forward(m_2 / 2, 2 * m_2, 1 * n_2, _buf);
-			forward(m_2 / 2, 3 * m_2, 3 * n_2, _buf);
+			add_sub(i + 0 * m_4, i + 4 * m_4); add_sub(i + 2 * m_4, i + 6 * m_4);
+			add_sub(i + 0 * m_4, i + 2 * m_4); lshift(i + 6 * m_4, 2 * e_4, _buf); add_sub(i + 4 * m_4, i + 6 * m_4);
+		}
+
+		for (size_t i = 0; i < m_4; ++i)
+		{
+			add_sub(i + 0 * m_4, i + 1 * m_4); lshift(i + 3 * m_4, 2 * e_4, _buf); add_sub(i + 2 * m_4, i + 3 * m_4);
+			lshift(i + 5 * m_4, 1 * e_4, _buf); add_sub(i + 4 * m_4, i + 5 * m_4); lshift(i + 7 * m_4, 3 * e_4, _buf); add_sub(i + 6 * m_4, i + 7 * m_4);
+		}
+
+#pragma omp parallel
+		{
+			const size_t thread_id = static_cast<size_t>(omp_get_thread_num());
+			const size_t bitrev[8] = { 0, 4, 2, 6, 1, 5, 3, 7 };
+			if (thread_id == 0) forward_Mersenne(m / 8);
+			else                forward(m / 8, thread_id * m_4, bitrev[thread_id] * e_4, &_buf[thread_id * 2 * _size]);
 		}
 	}
 };
@@ -574,9 +654,10 @@ public:
 	SSG(const unsigned int k, const size_t M, const size_t n) : _k(k), _M(M), _n(n), _l(size_t(1) << k), _x(n, _l), _y(n, _l) {}
 	virtual ~SSG() {}
 
+	static int get_nthreads() { return _nthreads; }
 	static void set_nthreads(const int nthreads)
 	{
-		if (nthreads > 1) omp_set_num_threads(4);
+		if (nthreads > 1) omp_set_num_threads(nthreads);
 		_nthreads = 1;
 		if (nthreads != 1)
 		{
@@ -588,20 +669,39 @@ public:
 		}
 	}
 
-	void set_y(const uint64_t * const y, const size_t size) { set_vector(_y, y, size); _y.forward_Mersenne_0(_l / 2, _nthreads); }
-
 	void get_x(uint64_t * const x, const size_t size) { get_vector(x, size, _x); }
+
+	void set_y(const uint64_t * const y, const size_t size)
+	{
+		set_vector(_y, y, size);
+		const size_t m = _l / 2;	// m >= 32
+		const int nthreads = _nthreads;
+		if      (nthreads == 8) _y.forward_Mersenne_8(m);
+		else if (nthreads == 4) _y.forward_Mersenne_4(m);
+		else if (nthreads == 2) _y.forward_Mersenne_2(m);
+		else                    _y.forward_Mersenne(m);
+	}
 
 	void mul_xy(const uint64_t * const x, const size_t size)
 	{
 		set_vector(_x, x, size);
-		_x.mul_Mersenne_0(_y, _l / 2, _k, _nthreads);
+		const unsigned int k = _k; const size_t m = _l / 2;	// m >= 32
+		const int nthreads = _nthreads;
+		if      (nthreads == 8) _x.mul_Mersenne_8(_y, m, k);
+		else if (nthreads == 4) _x.mul_Mersenne_4(_y, m, k);
+		else if (nthreads == 2) _x.mul_Mersenne_2(_y, m, k);
+		else                    _x.mul_Mersenne_1(_y, m, k);
 	}
 
 	void sqr(const uint64_t * const x, const size_t size)
 	{
 		set_vector(_x, x, size);
-		_x.mul_Mersenne_0(_x, _l / 2, _k, _nthreads);
+		const unsigned int k = _k; const size_t m = _l / 2;	// m >= 32
+		const int nthreads = _nthreads;
+		if      (nthreads == 8) _x.mul_Mersenne_8(_x, m, k);
+		else if (nthreads == 4) _x.mul_Mersenne_4(_x, m, k);
+		else if (nthreads == 2) _x.mul_Mersenne_2(_x, m, k);
+		else                    _x.mul_Mersenne_1(_x, m, k);
 	}
 
 	static void get_best_param(const size_t N, unsigned int & k, size_t & M, size_t & n)
