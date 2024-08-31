@@ -5,7 +5,7 @@ See Yves Gallot, Pieter Moree, Wadim Zudilin,
 The Erdős-Moser equation 1<sup>*k*</sup> + 2<sup>*k*</sup> + ... + (*m*−1)<sup>*k*</sup> = *m*<sup>*k*</sup> revisited using continued fractions.  
 [Math. Comp. **80** (2011), 1221–1237](https://www.ams.org/journals/mcom/2011-80-274/S0025-5718-2010-02439-1/).
 
-**Theorem 3**. if an integer pair (*m*, *k*) with *k* &ge; 2 satisfies the Erdős-Moser equation, then *m* > 2.7139 &middot; 10<sup>1 667 658 416</sup>.
+**Theorem 3**. If an integer pair (*m*, *k*) with *k* &ge; 2 satisfies the Erdős-Moser equation, then *m* > 2.7139 &middot; 10<sup>1 667 658 416</sup>.
 
 ## About
 This new version of the program is not based on the binary expansion of log 2. Instead, the main diagonal Padé approximant to log 2 at the point one is calculated. It can be computed using a generalized continued fraction but then convergents are not irreducible fractions. However, the canonical form can be obtained by dividing the numerator and denominator by a known function.  
