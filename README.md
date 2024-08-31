@@ -6,8 +6,8 @@ The Erdős-Moser equation 1<sup>*k*</sup> + 2<sup>*k*</sup> + ... + (*m*−1)<su
 [Math. Comp. **80** (2011), 1221–1237](https://www.ams.org/journals/mcom/2011-80-274/S0025-5718-2010-02439-1/).
 
 ## About
-This new version of program is not based on the binary expansion of log 2. Instead, the main diagonal Padé approximant to log 2 at the point one is calculated. It can be computed using a generalized continued fraction but then convergents are not irreducible fractions. However, the canonical form can be obtained by dividing the numerator and denominator by a known function.  
-If the normalized convergents of the generalized continued fraction and the coefficients of the regular continued fraction are evaluated together then the size of remaining *j*<sup> th</sup> fractions is smaller than the size of the binary expansion needed for *j* coefficients. Because memory size is the main limitation of this computation, this method is more efficient.  
+This new version of the program is not based on the binary expansion of log 2. Instead, the main diagonal Padé approximant to log 2 at the point one is calculated. It can be computed using a generalized continued fraction but then convergents are not irreducible fractions. However, the canonical form can be obtained by dividing the numerator and denominator by a known function.  
+If the normalized convergents of the generalized continued fraction and the coefficients of the regular continued fraction are evaluated together then the size of the remaining *j*<sup> th</sup> and (*j* + 1)<sup>th</sup> fractions is smaller than the size of the binary expansion needed for evaluating *j* coefficients. Because memory size is the main limitation of this computation, this method is more efficient.  
 If *q*<sub>*j*</sub> is a *n*-digit number, memory usage is about 3*n*.
 
 ## Results
