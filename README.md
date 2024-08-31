@@ -5,6 +5,19 @@ See Yves Gallot, Pieter Moree, Wadim Zudilin,
 The Erdős-Moser equation 1<sup>*k*</sup> + 2<sup>*k*</sup> + ... + (*m*−1)<sup>*k*</sup> = *m*<sup>*k*</sup> revisited using continued fractions.  
 [Math. Comp. **80** (2011), 1221–1237](https://www.ams.org/journals/mcom/2011-80-274/S0025-5718-2010-02439-1/).
 
+## About
+This new version of program is not based on the binary expansion of log 2. Instead, the main diagonal Padé approximant to log 2 at the point one is calculated. It can be computed using a generalized continued fraction but then convergents are not irreducible fractions. However, the canonical form can be obtained by dividing the numerator and denominator by a known function.  
+If the normalized convergents of the generalized continued fraction and the coefficients of the regular continued fraction are evaluated together then the size of remaining *j*<sup> th</sup> fractions is smaller than the size of the binary expansion needed for *j* coefficients. Because memory size is the main limitation of this computation, this method is more efficient.  
+If *q*<sub>*j*</sub> is a *n*-digit number, memory usage is about 3*n*.
+
+## Results
+
+The following table provides the smallest integers *j* satisfying conditions (a), (b) and (c) of Theorem 2 and (d) is checked for *p* &le; 43 such that 3 is a primitive root modulo *p*.  
+2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>2</sup> &middot; 7,
+2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>2</sup> &middot; 7<sup>2</sup> and
+2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>2</sup> &middot; 7<sup>3</sup> can be tested to improve the bound of Theorem 3.
+
+
 | *N* | *j*<sub>*N*</sub> | *a*<sub>*j*+1</sub> | *q*<sub>*j*</sub> <span style="font-weight: normal">(rounded down)</span> | *q*<sub>*j*</sub> <span style="font-weight: normal">mod 6</span> | *p*<span style="font-weight: normal">(*q*<sub>*j*</sub>)</span> |
 |:---:| ---:| ---:|:--- |:---:|:--- |
 | 1             |     642 |     764 | 2.383153 &middot; 10<sup>   330</sup> | -1 | |
