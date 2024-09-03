@@ -19,16 +19,19 @@ The following table provides the smallest integers *j* satisfying conditions (a)
 
 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>3</sup> and
 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>4</sup> are the best known results.  
-19# and 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>4</sup> &middot; 7 are the most wanted candidates to improve the bound of Theorem 3.
+19# = 9699690, 11! = 39916800 and 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>4</sup> &middot; 7 = 272160000 are the most wanted candidates to improve the bound of Theorem 3.
 
 | *N* | *j*<sub>*N*</sub> | *a*<sub>*j*+1</sub> | *q*<sub>*j*</sub> <span style="font-weight: normal">(rounded down)</span> | *q*<sub>*j*</sub> <span style="font-weight: normal">mod 6</span> | *p*<span style="font-weight: normal">(*q*<sub>*j*</sub>)</span> |
 |:---:| ---:| ---:|:--- |:---:|:---:|
 | 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>4</sup> &middot; 7 | ? | ? | | | |
+| 11! | ? | ? | | | |
 | 19# | ? | ? | | | |
 | 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>4</sup> | 2 015 385 392 | 21 941 638 090 | ~5.565196 &middot; 10<sup>1 038 523 018</sup>~ | -1 | 19 |
 |                                                             | 3 236 257 942 | 11 535 576 954 |  5.427816 &middot; 10<sup>1 667 658 416</sup>  | +1 | |
 | 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>3</sup> | 2 015 279 170 |  4 388 327 617 | ~5.565196 &middot; 10<sup>1 038 523 018</sup>~ | -1 | 19 |
 |                                                             | 3 236 170 820 |  2 307 115 390 |  5.427816 &middot; 10<sup>1 667 658 416</sup>  | +1 | | 
+| 10! | 1 738 197 230 | 3 345 301 699 | ~1.594940 &middot; 10<sup>  895 721 905</sup>~ | +1 | 5 |
+|     | 2 579 384 226 | 1 116 890 723 |  5.498581 &middot; 10<sup>1 329 206 901</sup>  | +1 |   |
 | 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>2</sup> | 1 738 154 976 | 1 433 700 727 | ~1.594940 &middot; 10<sup>  895 721 905</sup>~ | +1 | 5 |
 |                                                             | 1 977 626 256 |   853 324 651 | 1.196828 &middot; 10<sup>1 019 133 881</sup> | -1 | |
 | 17# | 367 396 948| 127 090 830 | ~4.724143 &middot; 10<sup>189 330 916</sup>~ | -1 |  5 |
