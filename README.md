@@ -5,7 +5,9 @@ See Yves Gallot, Pieter Moree, Wadim Zudilin,
 The Erdős-Moser equation 1<sup>*k*</sup> + 2<sup>*k*</sup> + ... + (*m*−1)<sup>*k*</sup> = *m*<sup>*k*</sup> revisited using continued fractions.  
 [Math. Comp. **80** (2011), 1221–1237](https://www.ams.org/journals/mcom/2011-80-274/S0025-5718-2010-02439-1/).
 
-**Theorem 3**. If an integer pair (*m*, *k*) with *k* &ge; 2 satisfies the Erdős-Moser equation, then *m* > 2.7139 &middot; 10<sup>1 667 658 416</sup>.
+On September 7<sup>th</sup> 2024, Robert Gahan found a new solution that fits conditions (a), (b), (c) and (d), using *N* = 2 &middot; 3 &middot; 5 &middot; 7 &middot; 11 &middot; 13 &middot; 17 &middot; 19 and *cfErdosMoser*. The new bound is:
+
+**Theorem 3**. If an integer pair (*m*, *k*) with *k* &ge; 2 satisfies the Erdős-Moser equation, then *m* > 6.0139 &middot; 10<sup>6 725 335 082</sup> and *k* > 4.009 &middot; 10<sup>6 725 335 082.
 
 ## About
 This new version of the program is not based on the binary expansion of log 2. Instead, the main diagonal Padé approximant to log 2 at the point one is calculated. It can be computed using a generalized continued fraction but then convergents are not irreducible fractions. However, the canonical form can be obtained by dividing the numerator and denominator by a known function.  
@@ -24,8 +26,9 @@ The following table provides the smallest integers *j* satisfying conditions (a)
 | *N* | *j*<sub>*N*</sub> | *a*<sub>*j*+1</sub> | *q*<sub>*j*</sub> <span style="font-weight: normal">(rounded down)</span> | *q*<sub>*j*</sub> <span style="font-weight: normal">mod 6</span> | *p*<span style="font-weight: normal">(*q*<sub>*j*</sub>)</span> |
 |:---:| ---:| ---:|:--- |:---:|:---:|
 | 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>4</sup> &middot; 7 | ? | ? | | | |
+| 23# | ? | ? | | | |
 | 11! | ? | ? | | | |
-| 19# | ? | ? | | | |
+| 19# | 13 050 765 960 | 4 245 878 986 | 1.202797 &middot; 10<sup>6 725 335 083</sup> | -1 | |
 | 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>4</sup> | 2 015 385 392 | 21 941 638 090 | ~5.565196 &middot; 10<sup>1 038 523 018</sup>~ | -1 | 19 |
 |                                                             | 3 236 257 942 | 11 535 576 954 |  5.427816 &middot; 10<sup>1 667 658 416</sup>  | +1 | |
 | 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>3</sup> | 2 015 279 170 |  4 388 327 617 | ~5.565196 &middot; 10<sup>1 038 523 018</sup>~ | -1 | 19 |
