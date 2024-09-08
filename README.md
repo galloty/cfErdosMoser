@@ -5,7 +5,7 @@ See Yves Gallot, Pieter Moree, Wadim Zudilin,
 The Erdős-Moser equation 1<sup>*k*</sup>&nbsp;+&nbsp;2<sup>*k*</sup>&nbsp;+&nbsp;...&nbsp;+&nbsp;(*m*−1)<sup>*k*</sup> = *m*<sup>*k*</sup> revisited using continued fractions.  
 [Math. Comp. **80** (2011), 1221–1237](https://www.ams.org/journals/mcom/2011-80-274/S0025-5718-2010-02439-1/).
 
-On September 7<sup>th</sup> 2024, Robert Gahan found a new solution that fits conditions (a), (b), (c) and (d), using *N* = 2&nbsp;&middot;&nbsp;3&nbsp;&middot;&nbsp;5&nbsp;&middot;&nbsp;7&nbsp;&middot;&nbsp;11&nbsp;&middot;&nbsp;13&nbsp;&middot;&nbsp;17&nbsp;&middot;&nbsp;19 and *cfErdosMoser*. The new bound is:
+On September 7<sup>th</sup> 2024, Robert Gahan found a new solution that fits conditions (a), (b), (c) and (d), using *N* = 2&nbsp;&middot;&nbsp;3&nbsp;&middot;&nbsp;5&nbsp;&middot;&nbsp;7&nbsp;&middot;&nbsp;11&nbsp;&middot;&nbsp;13&nbsp;&middot;&nbsp;17&nbsp;&middot;&nbsp;19 and *cfErdosMoser*. The processor was an Intel&reg; Core&trade; i9-13980HX with 64GB RAM, running Windows 11 Pro. This computer took about 40 hours with 8 threads, the peak memory usage was 24GB. The new bound is:
 
 **Theorem&nbsp;3**. If an integer pair (*m*,&nbsp;*k*) with *k*&nbsp;&ge;&nbsp;2 satisfies the Erdős-Moser equation, then *m*&nbsp;>&nbsp;6.0139&nbsp;&middot;&nbsp;10<sup>6&nbsp;725&nbsp;335&nbsp;082</sup> and *k*&nbsp;>&nbsp;4.009&nbsp;&middot;&nbsp;10<sup>6&nbsp;725&nbsp;335&nbsp;082</sup>.
 
