@@ -2,26 +2,25 @@
 The Erdős-Moser equation revisited using continued fractions
 
 See Yves Gallot, Pieter Moree, Wadim Zudilin,  
-The Erdős-Moser equation 1<sup>*k*</sup> + 2<sup>*k*</sup> + ... + (*m*−1)<sup>*k*</sup> = *m*<sup>*k*</sup> revisited using continued fractions.  
+The Erdős-Moser equation 1<sup>*k*</sup>&nbsp;+&nbsp;2<sup>*k*</sup>&nbsp;+&nbsp;...&nbsp;+&nbsp;(*m*−1)<sup>*k*</sup> = *m*<sup>*k*</sup> revisited using continued fractions.  
 [Math. Comp. **80** (2011), 1221–1237](https://www.ams.org/journals/mcom/2011-80-274/S0025-5718-2010-02439-1/).
 
-On September 7<sup>th</sup> 2024, Robert Gahan found a new solution that fits conditions (a), (b), (c) and (d), using *N* = 2 &middot; 3 &middot; 5 &middot; 7 &middot; 11 &middot; 13 &middot; 17 &middot; 19 and *cfErdosMoser*. The new bound is:
+On September 7<sup>th</sup> 2024, Robert Gahan found a new solution that fits conditions (a), (b), (c) and (d), using *N* = 2&nbsp;&middot;&nbsp;3&nbsp;&middot;&nbsp;5&nbsp;&middot;&nbsp;7&nbsp;&middot;&nbsp;11&nbsp;&middot;&nbsp;13&nbsp;&middot;&nbsp;17&nbsp;&middot;&nbsp;19 and *cfErdosMoser*. The new bound is:
 
-**Theorem 3**. If an integer pair (*m*, *k*) with *k* &ge; 2 satisfies the Erdős-Moser equation, then *m* > 6.0139 &middot; 10<sup>6 725 335 082</sup> and *k* > 4.009 &middot; 10<sup>6 725 335 082.
+**Theorem&nbsp;3**. If an integer pair (*m*,&nbsp;*k*) with *k*&nbsp;&ge;&nbsp;2 satisfies the Erdős-Moser equation, then *m*&nbsp;>&nbsp;6.0139&nbsp;&middot;&nbsp;10<sup>6&nbsp;725&nbsp;335&nbsp;082</sup> and *k*&nbsp;>&nbsp;4.009&nbsp;&middot;&nbsp;10<sup>6&nbsp;725&nbsp;335&nbsp;082</sup>.
 
 ## About
-This new version of the program is not based on the binary expansion of log 2. Instead, the main diagonal Padé approximant to log 2 at the point one is calculated. It can be computed using a generalized continued fraction but then convergents are not irreducible fractions. However, the canonical form can be obtained by dividing the numerator and denominator by a known function.  
-If the normalized convergents of the generalized continued fraction and the coefficients of the regular continued fraction are evaluated together then the size of the remaining *j*<sup> th</sup> and (*j* + 1)<sup>th</sup> fractions is smaller than the size of the binary expansion needed for evaluating *j* coefficients. Because memory size is the main limitation of this computation, this method is more efficient.  
+This new version of the program is not based on the binary expansion of log&nbsp;2. Instead, the main diagonal Padé approximant to log&nbsp;2 at the point one is calculated. It can be computed using a generalized continued fraction but then convergents are not irreducible fractions. However, the canonical form can be obtained by dividing the numerator and denominator by a known function.  
+If the normalized convergents of the generalized continued fraction and the coefficients of the regular continued fraction are evaluated together then the size of the remaining *j*<sup>&nbsp;th</sup> and (*j*&nbsp;+&nbsp;1)<sup>th</sup> fractions is smaller than the size of the binary expansion needed for evaluating *j* coefficients. Because memory size is the main limitation of this computation, this method is more efficient.  
 If *q*<sub>*j*</sub> is a *n*-digit number, memory usage is about 4*n*.
 
 ## Results
 
-The following table provides the smallest integers *j* satisfying conditions (a), (b) and (c) of Theorem 2 and (d) is checked for *p* &le; 43 such that 3 is a primitive root modulo *p*.  
-*n*# is the [primorial](https://en.wikipedia.org/wiki/Primorial)  function.
+The following table provides the smallest integers *j* satisfying conditions (a), (b) and (c) of Theorem&nbsp;2 and (d) is checked for *p*&nbsp;&le;&nbsp;43 such that 3 is a primitive root modulo&nbsp;*p*.  
+*n*# is the [primorial](https://en.wikipedia.org/wiki/Primorial) function.
 
-2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>3</sup> and
-2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>4</sup> are the best known results.  
-19# = 9699690, 11! = 39916800 and 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>4</sup> &middot; 7 = 272160000 are the most wanted candidates to improve the bound of Theorem 3.
+The solution to 19# = 9699690, found by Robert Gahan, is the best known result.  
+11! = 39916800, 23# = 223092870 and 2<sup>8</sup>&nbsp;&middot;&nbsp;3<sup>5</sup>&nbsp;&middot;&nbsp;5<sup>4</sup>&nbsp;&middot;&nbsp;7 = 272160000 are the most wanted candidates to improve the bound of Theorem&nbsp;3.
 
 | *N* | *j*<sub>*N*</sub> | *a*<sub>*j*+1</sub> | *q*<sub>*j*</sub> <span style="font-weight: normal">(rounded down)</span> | *q*<sub>*j*</sub> <span style="font-weight: normal">mod 6</span> | *p*<span style="font-weight: normal">(*q*<sub>*j*</sub>)</span> |
 |:---:| ---:| ---:|:--- |:---:|:---:|
