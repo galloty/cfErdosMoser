@@ -1,9 +1,9 @@
 CC = g++ -m64 -std=c++17 -fopenmp
 CFLAGS = -Wall -Wextra -Wsign-conversion -ffinite-math-only -fprefetch-loop-arrays
-RFLAGS = -O3 -march=native 
+RFLAGS = -O3 -march=native
 
 BIN_DIR = .
-SRC_DIR = .
+SRC_DIR = src
 
 EXEC = $(BIN_DIR)/cfErdosMoser.exe
 
@@ -12,4 +12,4 @@ build: $(EXEC)
 clean:
 
 $(EXEC): $(SRC_DIR)/*.cpp $(SRC_DIR)/*.h
-	$(CC) $(CFLAGS) $(RFLAGS) -static cfErdosMoser.cpp -lgmp -o $@
+	$(CC) $(CFLAGS) $(RFLAGS) -static $(SRC_DIR)/cfErdosMoser.cpp -lgmp -o $@
