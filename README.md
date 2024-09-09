@@ -20,14 +20,14 @@ The following table provides the smallest integers *j* satisfying conditions (a)
 *n*# is the [primorial](https://en.wikipedia.org/wiki/Primorial) function.
 
 The solution to 19# = 9699690, found by Robert Gahan, is the best known result.  
-11! = 39916800, 23# = 223092870 and 2<sup>8</sup>&nbsp;&middot;&nbsp;3<sup>5</sup>&nbsp;&middot;&nbsp;5<sup>4</sup>&nbsp;&middot;&nbsp;7 = 272160000 are the most wanted candidates to improve the bound of Theorem&nbsp;3.
+23# = 223092870 and 2<sup>8</sup>&nbsp;&middot;&nbsp;3<sup>5</sup>&nbsp;&middot;&nbsp;5<sup>4</sup>&nbsp;&middot;&nbsp;7 = 272160000 are the most wanted candidates to improve the bound of Theorem&nbsp;3.
 
 | *N* | *j*<sub>*N*</sub> | *a*<sub>*j*+1</sub> | *q*<sub>*j*</sub> <span style="font-weight: normal">(rounded down)</span> | *q*<sub>*j*</sub> <span style="font-weight: normal">mod 6</span> | *p*<span style="font-weight: normal">(*q*<sub>*j*</sub>)</span> |
 |:---:| ---:| ---:|:--- |:---:|:---:|
 | 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>4</sup> &middot; 7 | ? | ? | | | |
 | 23# | ? | ? | | | |
-| 11! | ? | ? | | | |
-| 19# | 13 050 765 960 | 4 245 878 986 | 1.202797 &middot; 10<sup> 6 725 335 083</sup> | -1 | |
+| 19# | 13 050 765 960 |  4 245 878 986 | 1.202797 &middot; 10<sup> 6 725 335 083</sup> | -1 | |
+| 11! |  5 151 307 662 | 14 371 269 642 | 1.086746 &middot; 10<sup> 2 654 644 376</sup> | -1 | |
 | 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>4</sup> | 2 015 385 392 | 21 941 638 090 | ~5.565196 &middot; 10<sup> 1 038 523 018</sup>~ | -1 | 19 |
 |                                                             | 3 236 257 942 | 11 535 576 954 |  5.427816 &middot; 10<sup> 1 667 658 416</sup>  | +1 | |
 | 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>3</sup> | 2 015 279 170 |  4 388 327 617 | ~5.565196 &middot; 10<sup> 1 038 523 018</sup>~ | -1 | 19 |
@@ -36,8 +36,8 @@ The solution to 19# = 9699690, found by Robert Gahan, is the best known result.
 |     | 2 579 384 226 | 1 116 890 723 |  5.498581 &middot; 10<sup> 1 329 206 901</sup>  | +1 |   |
 | 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>2</sup> | 1 738 154 976 | 1 433 700 727 | ~1.594940 &middot; 10<sup>   895 721 905</sup>~ | +1 | 5 |
 |                                                             | 1 977 626 256 |   853 324 651 |  1.196828 &middot; 10<sup> 1 019 133 881</sup>  | -1 | |
-| 17# | 367 396 948| 127 090 830 | ~4.724143 &middot; 10<sup> 189 330 916</sup>~ | -1 |  5 |
-|     | 586 036 322| 331 038 577 | ~9.914162 &middot; 10<sup> 302 014 571</sup>~ | +1 | 19 |
-|     | 639 808 912| 675 894 301 |  2.276299 &middot; 10<sup> 329 726 891</sup>  | +1 | |
+| 17# | 367 396 948 | 127 090 830 | ~4.724143 &middot; 10<sup> 189 330 916</sup>~ | -1 |  5 |
+|     | 586 036 322 | 331 038 577 | ~9.914162 &middot; 10<sup> 302 014 571</sup>~ | +1 | 19 |
+|     | 639 808 912 | 675 894 301 |  2.276299 &middot; 10<sup> 329 726 891</sup>  | +1 | |
 | 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5 | 351 661 538 | 85 898 211 | 9.729739 &middot; 10<sup> 181 214 202</sup> | -1 | |
 | 2<sup>8</sup> &middot; 3<sup>5</sup> | 155 830 946 | 31 664 035 | 2.257099 &middot; 10<sup> 80 303 211</sup> | -1 | |
