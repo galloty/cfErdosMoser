@@ -24,8 +24,8 @@ The solution to 19# = 9699690, found by Robert Gahan, is the best known result.
 
 | *N* | *j*<sub>*N*</sub> | *a*<sub>*j*+1</sub> | *q*<sub>*j*</sub> <span style="font-weight: normal">(rounded down)</span> | *q*<sub>*j*</sub> <span style="font-weight: normal">mod 6</span> | *p*<span style="font-weight: normal">(*q*<sub>*j*</sub>)</span> |
 |:---:| ---:| ---:|:--- |:---:|:---:|
-| 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>4</sup> &middot; 7 | ? | ? | | | |
 | 23# | ? | ? | | | |
+| 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>4</sup> &middot; 7 | 13 988 361 422 | 107 695 241 629 | 1.444542 &middot; 10<sup> 7 208 444 672</sup> | -1 | |
 | 19# | 13 050 765 960 |  4 245 878 986 | 1.202797 &middot; 10<sup> 6 725 335 083</sup> | -1 | |
 | 11! |  5 151 307 662 | 14 371 269 642 | 1.086746 &middot; 10<sup> 2 654 644 376</sup> | -1 | |
 | 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>4</sup> | 2 015 385 392 | 21 941 638 090 | ~5.565196 &middot; 10<sup> 1 038 523 018</sup>~ | -1 | 19 |
