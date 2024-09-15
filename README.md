@@ -19,13 +19,16 @@ If *q*<sub>*j*</sub> is a *n*-digit number, memory usage is about 4*n*.
 The following table provides the smallest integers *j* satisfying conditions (a), (b) and (c) of Theorem&nbsp;2 and (d) is checked for *p*&nbsp;&le;&nbsp;43 such that 3 is a primitive root modulo&nbsp;*p*.  
 *n*# is the [primorial](https://en.wikipedia.org/wiki/Primorial) function.
 
-The solution to 19# = 9699690, found by Robert Gahan, is the best known result.  
-23# = 223092870 and 2<sup>8</sup>&nbsp;&middot;&nbsp;3<sup>5</sup>&nbsp;&middot;&nbsp;5<sup>4</sup>&nbsp;&middot;&nbsp;7 = 272160000 are the most wanted candidates to improve the bound of Theorem&nbsp;3.
+The solution to 2<sup>8</sup>&nbsp;&middot;&nbsp;3<sup>5</sup>&nbsp;&middot;&nbsp;5<sup>4</sup>&nbsp;&middot;&nbsp;7 = 272160000, found by Robert Gahan, is the best known result.  
+3&nbsp;&middot;&nbsp;19# = 29099070, 4&nbsp;&middot;&nbsp;19# = 38798760 and 23# = 223092870 are the most wanted candidates to improve the bound of Theorem&nbsp;3.
 
 | *N* | *j*<sub>*N*</sub> | *a*<sub>*j*+1</sub> | *q*<sub>*j*</sub> <span style="font-weight: normal">(rounded down)</span> | *q*<sub>*j*</sub> <span style="font-weight: normal">mod 6</span> | *p*<span style="font-weight: normal">(*q*<sub>*j*</sub>)</span> |
 |:---:| ---:| ---:|:--- |:---:|:---:|
 | 23# | ? | ? | | | |
+| 4 &middot;19# | ? | ? | | | |
+| 3 &middot;19# | ? | ? | | | |
 | 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>4</sup> &middot; 7 | 13 988 361 422 | 107 695 241 629 | 1.444542 &middot; 10<sup> 7 208 444 672</sup> | -1 | |
+| 2 &middot;19# | 13 078 292 184 |  5 890 259 269 | 6.066802 &middot; 10<sup> 6 739 544 561</sup> | -1 | |
 | 19# | 13 050 765 960 |  4 245 878 986 | 1.202797 &middot; 10<sup> 6 725 335 083</sup> | -1 | |
 | 11! |  5 151 307 662 | 14 371 269 642 | 1.086746 &middot; 10<sup> 2 654 644 376</sup> | -1 | |
 | 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>4</sup> | 2 015 385 392 | 21 941 638 090 | ~5.565196 &middot; 10<sup> 1 038 523 018</sup>~ | -1 | 19 |
