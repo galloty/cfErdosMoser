@@ -64,20 +64,50 @@ public:
 
 	bool exists() const { return (_file != nullptr); }
 
+	static const size_t IO_SIZE_MAX = 64 * 1024 * 1024;
+
 	bool read(char * const ptr, const size_t size)
 	{
-		const size_t ret = std::fread(ptr, sizeof(char), size, _file);
-		_crc32 = rc_crc32(_crc32, ptr, size);
-		if (ret == size * sizeof(char)) return true;
+		size_t s = size;
+		char * cptr = ptr;
+		while (s > IO_SIZE_MAX)
+		{
+			const size_t ret = std::fread(cptr, sizeof(char), IO_SIZE_MAX, _file);
+			_crc32 = rc_crc32(_crc32, cptr, IO_SIZE_MAX);
+			if (ret != IO_SIZE_MAX * sizeof(char))
+			{
+				error("failure of a read operation");
+				return false;
+			}
+			cptr += IO_SIZE_MAX * sizeof(char);
+			s -= IO_SIZE_MAX;
+		}
+		const size_t ret = std::fread(cptr, sizeof(char), s, _file);
+		_crc32 = rc_crc32(_crc32, cptr, s);
+		if (ret == s * sizeof(char)) return true;
 		error("failure of a read operation");
 		return false;
 	}
 
 	bool write(const char * const ptr, const size_t size)
 	{
-		const size_t ret = std::fwrite(ptr, sizeof(char), size, _file);
-		_crc32 = rc_crc32(_crc32, ptr, size);
-		if (ret == size * sizeof(char)) return true;
+		size_t s = size;
+		const char * cptr = ptr;
+		while (s > IO_SIZE_MAX)
+		{
+			const size_t ret = std::fwrite(cptr, sizeof(char), IO_SIZE_MAX, _file);
+			_crc32 = rc_crc32(_crc32, cptr, IO_SIZE_MAX);
+			if (ret != IO_SIZE_MAX * sizeof(char))
+			{
+				error("failure of a write operation");
+				return false;
+			}
+			cptr += IO_SIZE_MAX * sizeof(char);
+			s -= IO_SIZE_MAX;
+		}
+		const size_t ret = std::fwrite(cptr, sizeof(char), s, _file);
+		_crc32 = rc_crc32(_crc32, cptr, s);
+		if (ret == s * sizeof(char)) return true;
 		error("failure of a write operation");
 		return false;
 	}
