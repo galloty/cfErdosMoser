@@ -5,7 +5,7 @@ See Yves Gallot, Pieter Moree, Wadim Zudilin,
 The Erdős-Moser equation 1<sup>*k*</sup>&nbsp;+&nbsp;2<sup>*k*</sup>&nbsp;+&nbsp;...&nbsp;+&nbsp;(*m*−1)<sup>*k*</sup> = *m*<sup>*k*</sup> revisited using continued fractions.  
 [Math. Comp. **80** (2011), 1221–1237](https://www.ams.org/journals/mcom/2011-80-274/S0025-5718-2010-02439-1/).
 
-On September 2024, Robert Gahan established the new benchmark *m* > 10<sup>10<sup>10</sup></sup> with *cfErdosMoser*. The processor was an Intel&reg; Core&trade; i9-13980HX with 64GB RAM, running Windows 11 Pro. It took about 61 hours with 8 threads and the peak memory usage was 33GB to prove, using *N* = 3&nbsp;&middot;&nbsp;19#, that conditions (a), (b), (c) are not satisfied if *q*<sub>*j*</sub> < 7.76&nbsp;&middot;&nbsp;10<sup>&nbsp;10&nbsp;381&nbsp;635&nbsp;903</sup>. With *N* = 2<sup>8</sup>&nbsp;&middot;&nbsp;3<sup>5</sup>&nbsp;&middot;&nbsp;5<sup>4</sup>&nbsp;&middot;&nbsp;7, it took about 91 hours and the peak memory usage was 56GB to find the solution *q*<sub>*j*</sub> = 7.69&nbsp;&middot;&nbsp;10<sup>&nbsp;16&nbsp;771&nbsp;044&nbsp;760</sup> that fits conditions (a), (b), (c) and partly (d).
+On September 2024, Robert Gahan established the new benchmark *m* > 10<sup>10<sup>10</sup></sup> with *cfErdosMoser*. The processor was an Intel&reg; Core&trade; i9-13980HX with 64GB RAM, running Windows 11 Pro. It took about 61 hours with 8 threads and the peak memory usage was 33&nbsp;GB to prove, using *N* = 3&nbsp;&middot;&nbsp;19#, that conditions (a), (b), (c) are not satisfied if *q*<sub>*j*</sub> < 7.76&nbsp;&middot;&nbsp;10<sup>&nbsp;10&nbsp;381&nbsp;635&nbsp;903</sup>. With *N* = 2<sup>8</sup>&nbsp;&middot;&nbsp;3<sup>5</sup>&nbsp;&middot;&nbsp;5<sup>4</sup>&nbsp;&middot;&nbsp;7, it took about 91 hours and the peak memory usage was 56&nbsp;GB to find the solution *q*<sub>*j*</sub> = 7.69&nbsp;&middot;&nbsp;10<sup>&nbsp;16&nbsp;771&nbsp;044&nbsp;760</sup> that fits conditions (a), (b), (c) and partly (d).
 
 **Theorem&nbsp;3** (2024). If an integer pair (*m*,&nbsp;*k*) with *k*&nbsp;&ge;&nbsp;2 satisfies the Erdős-Moser equation, then *m*&nbsp;>&nbsp;*k*&nbsp;>&nbsp;10<sup>10<sup>10</sup></sup>.
 
@@ -20,11 +20,11 @@ The following table provides the smallest integers *j* satisfying conditions (a)
 *n*# is the [primorial](https://en.wikipedia.org/wiki/Primorial) function.
 
 The solution to 2<sup>8</sup>&nbsp;&middot;&nbsp;3<sup>5</sup>&nbsp;&middot;&nbsp;5<sup>4</sup>&nbsp;&middot;&nbsp;7 = 272160000, found by Robert Gahan, is the best known result.  
-23# = 223092870 is the most wanted candidate to improve the bound of Theorem&nbsp;3.
+23# = 223092870 is the most wanted candidate.
 
 | *N* | *j*<sub>*N*</sub> | *a*<sub>*j*+1</sub> | *q*<sub>*j*</sub> <span style="font-weight: normal">(rounded down)</span> | *q*<sub>*j*</sub> <span style="font-weight: normal">mod 6</span> | *p*<span style="font-weight: normal">(*q*<sub>*j*</sub>)</span> |
 |:---:| ---:| ---:|:--- |:---:|:---:|
-| 23# | ? | ? | | | |
+| 23# | > 58 &middot; 10<sup> 9</sup> | ? | > 10<sup> 30 000 000 000</sup> | | |
 | 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>4</sup> &middot; 7 | 13 988 361 422 | 107 695 241 629 | ~1.444542 &middot; 10<sup> 7 208 444 672</sup>~ | -1 | 7 |
 |                                                                        | 32 544 869 308 |  65 416 187 470 | 7.699688 &middot; 10<sup> 16 771 044 760</sup> | -1 | |
 | 3 &middot; 19# | 20 145 968 414 | 8 176 658 150 | 7.766616 &middot; 10<sup> 10 381 635 903</sup> | +1 | |
