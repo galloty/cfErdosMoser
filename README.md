@@ -19,13 +19,14 @@ If *q*<sub>*j*</sub> is a *n*-digit number, memory usage is about 4*n*.
 The following table provides the smallest integers *j* satisfying conditions (a), (b) and (c) of Theorem&nbsp;2 and (d) is checked for *p*&nbsp;&le;&nbsp;43 such that 3 is a primitive root modulo&nbsp;*p*.  
 *n*# is the [primorial](https://en.wikipedia.org/wiki/Primorial) function.
 
-The solution to 2<sup>8</sup>&nbsp;&middot;&nbsp;3<sup>5</sup>&nbsp;&middot;&nbsp;5<sup>4</sup>&nbsp;&middot;&nbsp;7 = 272160000, found by Robert Gahan, is the best known result.  
+The solutions to 2<sup>8</sup>&nbsp;&middot;&nbsp;3<sup>5</sup>&nbsp;&middot;&nbsp;5<sup>4</sup>&nbsp;&middot;&nbsp;7 = 272160000 and 2<sup>8</sup>&nbsp;&middot;&nbsp;3<sup>5</sup>&nbsp;&middot;&nbsp;5<sup>4</sup>&nbsp;&middot;&nbsp;7<sup>2</sup> = 1905120000, found by Robert Gahan, are the best known results.  
 23# = 223092870 is the most wanted candidate.
 
 | *N* | *j*<sub>*N*</sub> | *a*<sub>*j*+1</sub> | *q*<sub>*j*</sub> <span style="font-weight: normal">(rounded down)</span> | *q*<sub>*j*</sub> <span style="font-weight: normal">mod 6</span> | *p*<span style="font-weight: normal">(*q*<sub>*j*</sub>)</span> |
 |:---:| ---:| ---:|:--- |:---:|:---:|
-| 23# | > 58 &middot; 10<sup> 9</sup> | ? | > 10<sup> 30 000 000 000</sup> | | |
-| 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>4</sup> &middot; 7 | 13 988 361 422 | 107 695 241 629 | ~1.444542 &middot; 10<sup> 7 208 444 672</sup>~ | -1 | 7 |
+| 23# | > 78 &middot; 10<sup> 9</sup> | | > 10<sup> 40 000 000 000</sup> | | |
+| 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>4</sup> &middot; 7<sup>2 | 32 544 936 570 | 457 913 312 295 | 7.699688 &middot; 10<sup> 16 771 044 760 | -1 | |
+| 2<sup>8</sup> &middot; 3<sup>5</sup> &middot; 5<sup>4</sup> &middot; 7       | 13 988 361 422 | 107 695 241 629 | ~1.444542 &middot; 10<sup> 7 208 444 672</sup>~ | -1 | 7 |
 |                                                                        | 32 544 869 308 |  65 416 187 470 | 7.699688 &middot; 10<sup> 16 771 044 760</sup> | -1 | |
 | 3 &middot; 19# | 20 145 968 414 | 8 176 658 150 | 7.766616 &middot; 10<sup> 10 381 635 903</sup> | +1 | |
 | 2 &middot; 19# | 13 078 292 184 | 5 890 259 269 | 6.066802 &middot; 10<sup>  6 739 544 561</sup> | -1 | |
